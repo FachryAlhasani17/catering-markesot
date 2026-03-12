@@ -1,0 +1,1 @@
+<?php require 'vendor/autoload.php'; \ = require_once 'bootstrap/app.php'; \ = \->make(Illuminate\Contracts\Console\Kernel::class); \->bootstrap(); \ = app()->make(App\Filament\Pages\ManageSettings::class); try { \->mount(); echo 'OK'; } catch (\Exception \) { echo \->getMessage(); }
