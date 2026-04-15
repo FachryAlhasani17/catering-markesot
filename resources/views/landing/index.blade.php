@@ -144,12 +144,16 @@
       <div class="dss-sparkle">🧠</div> Masih bingung? Coba rekomendasi
     </button>
   </div>
+  <div style="margin-top:1rem;">
+    <a href="https://wa.me/6208123480411" target="_blank" class="btn-dss-hero" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.2);text-decoration:none;">
+      📞 Hubungi Kami — 08123480411
+    </a>
+  </div>
 </section>
 
 <!-- FOOTER -->
 <footer class="footer">
   <div><div class="footer-brand">MARKESOT</div><div class="footer-info">Kantin Universitas Jember<br>© 2025 Markesot. All rights reserved.</div></div>
-  <div class="footer-contact">📞 08123480411</div>
 </footer>
 
 <!-- FABs -->
