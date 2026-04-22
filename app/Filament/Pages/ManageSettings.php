@@ -103,25 +103,6 @@ class ManageSettings extends Page
                             ->label('Nama Pemilik Rekening')
                             ->maxLength(255),
                     ])->columns(3),
-
-                \Filament\Schemas\Components\Section::make('QR Code Pembayaran')
-                    ->icon('heroicon-o-qr-code')
-                    ->schema([
-                        \Filament\Forms\Components\Textarea::make('payment_qris_string')
-                            ->label('QRIS String Text')
-                            ->helperText('Masukkan teks / string QRIS di sini jika ingin generate QRIS secara dinamis.')
-                            ->rows(3)
-                            ->columnSpanFull(),
-
-                        \Filament\Forms\Components\FileUpload::make('qr_payment_image')
-                            ->label('Upload Gambar QRIS (Alternatif)')
-                            ->helperText('Gunakan ini jika kamu hanya ingin mengupload gambar statis.')
-                            ->image()
-                            ->directory('settings')
-                            ->visibility('public')
-                            ->nullable()
-                            ->columnSpanFull(),
-                    ]),
             ])
             ->statePath('data');
     }
