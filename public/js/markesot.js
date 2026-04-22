@@ -55,17 +55,17 @@ function updateOrderSteps(){
 }
 
 function oS1(){
-  let h=`<div class="menu-cat-label">🍽 Makanan</div>`;
+  let h=`<div class="menu-cat-label"><img src="/images/icons/food.png" class="cat-icon" alt="" onerror="this.style.display='none'"> Makanan</div>`;
   MENUS.filter(m=>m.cat==='food').forEach(m=>h+=mRow(m));
-  h+=`<div class="menu-cat-label">🥤 Minuman</div>`;
+  h+=`<div class="menu-cat-label"><img src="/images/icons/drink.png" class="cat-icon" alt="" onerror="this.style.display='none'"> Minuman</div>`;
   MENUS.filter(m=>m.cat==='drink').forEach(m=>h+=mRow(m));
   const t=oTotal(),has=t>0;
   if(has){
     h+=`<div class="order-box">`;
-    MENUS.filter(m=>qty[m.id]>0).forEach(m=>{h+=`<div class="orow"><span>${m.emoji} ${m.name} ×${qty[m.id]}</span><span>${fmt(m.price*qty[m.id])}</span></div>`;});
+    MENUS.filter(m=>qty[m.id]>0).forEach(m=>{h+=`<div class="orow"><span>${m.name} ×${qty[m.id]}</span><span>${fmt(m.price*qty[m.id])}</span></div>`;});
     h+=`<div class="orow orow-total"><span>Total</span><span>${fmt(t)}</span></div></div>`;
-  }else{h+=`<div class="empty-note"><span>🛒</span>Belum ada menu yang dipilih</div>`;}
-  h+=`<button class="btn-primary" onclick="oGoStep(2)" ${!has?'disabled':''}>Lanjut ke Pembayaran →</button>`;
+  }else{h+=`<div class="empty-note">Belum ada menu yang dipilih</div>`;}
+  h+=`<button class="btn-primary" onclick="oGoStep(2)" ${!has?'disabled':''}>Lanjut ke Pembayaran</button>`;
   return h;
 }
 
@@ -77,64 +77,46 @@ function mRow(m){
 function chgQty(id,d){qty[id]=Math.max(0,(qty[id]||0)+d);renderOrder();}
 function oGoStep(n){oStep=n;if(n===2){payMethod=null;uploaded=null;}renderOrder();}
 
-let cName = '', cPhone = '', lastOrderNumber = '';
+let cName='', cPhone='', cAddress='', cDate='',
+    lastOrderNumber='', lastPayMethod='', lastTotal=0, lastDp=0;
 
 function oS2(){
-  const t=oTotal(),d=oDp();
-  let h=`<div class="dp-banner"><div class="dp-ico">💡</div><div class="dp-info"><h4>Kebijakan DP ${DP_PCT}%</h4><p>DP ditetapkan admin. Pelunasan saat pengambilan.</p></div><div class="dp-right"><div class="dp-num">${fmt(d)}</div><div class="dp-lbl">DP yang dibayar</div></div></div>
-  
-  <div style="margin-bottom:1.4rem;">
-    <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:var(--text-light);margin-bottom:.5rem;">Data Diri</div>
-    <input type="text" id="custName" placeholder="Nama Lengkap (min 3 kar)" value="${cName}" oninput="cName=this.value;checkData()" style="width:100%;padding:.8rem;border:1px solid var(--border);border-radius:10px;margin-bottom:.5rem;font-family:inherit;font-size:.9rem;background:white;">
-    <input type="tel" id="custPhone" placeholder="No WhatsApp (cth: 0812...)" value="${cPhone}" oninput="cPhone=this.value;checkData()" style="width:100%;padding:.8rem;border:1px solid var(--border);border-radius:10px;font-family:inherit;font-size:.9rem;background:white;">
-  </div>
+  const t=oTotal(), d=oDp();
+  const today = new Date().toISOString().split('T')[0];
 
-  <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--text-light);margin-bottom:.8rem;">Metode Pembayaran</div>
+  let h = `<div class="dp-banner"><div class="dp-ico"><img src="/images/icons/info.png" class="icon-img" alt="" onerror="this.style.display='none'"></div><div class="dp-info"><h4>Kebijakan DP ${DP_PCT}%</h4><p>DP ditetapkan admin. Pelunasan saat pengambilan.</p></div><div class="dp-right"><div class="dp-num">${fmt(d)}</div><div class="dp-lbl">DP yang dibayar</div></div></div>
+  <div class="form-section">
+    <div class="form-section-label">Data Pemesan</div>
+    <input type="text" id="custName" placeholder="Nama Lengkap (min. 3 karakter)" value="${cName}" oninput="cName=this.value;checkData()" class="cust-input">
+    <input type="tel" id="custPhone" placeholder="No. WhatsApp (contoh: 08123...)" value="${cPhone}" oninput="cPhone=this.value;checkData()" class="cust-input">
+    <textarea id="custAddress" placeholder="Alamat lengkap (untuk pengambilan / pengiriman)" oninput="cAddress=this.value;checkData()" class="cust-input cust-textarea" rows="2">${cAddress}</textarea>
+    <label class="cust-label">Tanggal Pesanan Dibutuhkan</label>
+    <input type="date" id="custDate" value="${cDate}" min="${today}" oninput="cDate=this.value;checkData()" class="cust-input">
+  </div>
+  <div class="form-section-label" style="margin-top:1.4rem;margin-bottom:.7rem;">Metode Pembayaran</div>
   <div class="pay-opts">
-    <div class="pay-opt ${payMethod==='qris'?'sel':''}" onclick="selPay('qris')"><div class="pay-opt-icon">📱</div><div class="pay-opt-name">QRIS</div><div class="pay-opt-hint">Scan & bayar cepat</div></div>
-    <div class="pay-opt ${payMethod==='bank'?'sel':''}" onclick="selPay('bank')"><div class="pay-opt-icon">🏦</div><div class="pay-opt-name">Transfer Bank</div><div class="pay-opt-hint">BRI / BNI / Mandiri</div></div>
+    <div class="pay-opt ${payMethod==='cash'?'sel':''}" onclick="selPay('cash')"><div class="pay-opt-icon"><img src="/images/icons/cash.png" class="icon-img" alt="Tunai" onerror="this.style.display='none'"></div><div class="pay-opt-name">Tunai</div><div class="pay-opt-hint">Bayar saat pengambilan</div></div>
+    <div class="pay-opt ${payMethod==='bank'?'sel':''}" onclick="selPay('bank')"><div class="pay-opt-icon"><img src="/images/icons/bank.png" class="icon-img" alt="Transfer" onerror="this.style.display='none'"></div><div class="pay-opt-name">Transfer Bank</div><div class="pay-opt-hint">BRI / BNI / Mandiri</div></div>
   </div>`;
-  
-  if(payMethod==='qris'){
-    h+=`<div class="pay-detail"><h4>🔲 Scan QRIS Berikut</h4>
-    <div class="qris-box" id="qrisContainer">
-      <span class="dss-spinner" style="width:30px;height:30px;margin:1rem auto;border-width:2px;display:block;"></span>
-      <div style="text-align:center;line-height:1.5">Generating QRIS...</div>
-    </div>
-    <p style="text-align:center;font-size:.8rem;color:var(--text-light);margin-top:.8rem;">Nominal DP: <strong style="color:var(--maroon)">${fmt(d)}</strong></p></div>`;
+
+  if(payMethod==='cash'){
+    h+=`<div class="pay-detail"><h4>Informasi Pembayaran Tunai</h4><div style="background:var(--green-bg);border:1px solid rgba(30,127,81,.25);border-radius:12px;padding:1.1rem 1.2rem;"><div style="font-weight:700;font-size:.92rem;color:var(--green);margin-bottom:.3rem;">Bayar Lunas saat Pengambilan</div><div style="font-size:.78rem;color:var(--text-light);">Tidak diperlukan DP. Pembayaran dilakukan langsung di tempat.</div><div style="border-top:1px solid rgba(30,127,81,.2);padding-top:.7rem;margin-top:.7rem;display:flex;justify-content:space-between;align-items:center;"><span style="font-size:.82rem;color:var(--text-light);">Total yang dibayar</span><span style="font-size:1.15rem;font-weight:800;color:var(--green);">${fmt(t)}</span></div></div></div>`;
   }
   if(payMethod==='bank'){
-    h+=`<div class="pay-detail"><h4>🏦 Detail Rekening</h4><div class="bank-line"><span class="bl-label">Bank</span><span class="bl-val" id="bankNameTxt">Loading...</span></div><div class="bank-line"><span class="bl-label">No. Rekening</span><span class="bl-val"><span id="bankAccTxt">Loading...</span> <button class="copy-btn" onclick="cp(document.getElementById('bankAccTxt').innerText)">Copy</button></span></div><div class="bank-line"><span class="bl-label">Atas Nama</span><span class="bl-val" id="bankHolderTxt">Loading...</span></div><div class="bank-line"><span class="bl-label">Nominal DP</span><span class="bl-val" style="color:var(--maroon)">${fmt(d)}</span></div></div>`;
+    h+=`<div class="pay-detail"><h4>Detail Rekening Bank</h4><div class="bank-line"><span class="bl-label">Bank</span><span class="bl-val" id="bankNameTxt">Loading...</span></div><div class="bank-line"><span class="bl-label">No. Rekening</span><span class="bl-val"><span id="bankAccTxt">Loading...</span> <button class="copy-btn" onclick="cp(document.getElementById('bankAccTxt').innerText)">Copy</button></span></div><div class="bank-line"><span class="bl-label">Atas Nama</span><span class="bl-val" id="bankHolderTxt">Loading...</span></div><div class="bank-line"><span class="bl-label">Nominal DP</span><span class="bl-val" style="color:var(--maroon)">${fmt(d)}</span></div></div>`;
+    h+=`<span class="upload-label">Upload Bukti Transfer</span><div class="upload-zone"><input type="file" accept="image/*" id="paymentFile" onchange="handleFile(event)"/><div class="upload-ico"><img src="/images/icons/upload.png" class="icon-img" alt="Upload" onerror="this.style.display='none'"></div><div class="upload-txt" id="uploadText">Klik atau seret foto bukti transfer</div><div class="upload-hint">JPG, PNG — maks. 5MB</div><img class="preview-img ${uploaded?'show':''}" id="prevImg" ${uploaded?`src="${uploaded.previewExt}"`:''}/>  </div>`;
   }
-  if(payMethod){
-    h+=`<span class="upload-label">📎 Upload Bukti Pembayaran</span><div class="upload-zone"><input type="file" accept="image/*" id="paymentFile" onchange="handleFile(event)"/><div class="upload-ico">📂</div><div class="upload-txt" id="uploadText">Klik atau seret foto bukti pembayaran</div><div class="upload-hint">JPG, PNG — maks. 5MB</div><img class="preview-img ${uploaded?'show':''}" id="prevImg" ${uploaded?`src="${uploaded.previewExt}"`:''}/></div>`;
-  }
-  h+=`<div class="order-box" style="margin-top:1.4rem;"><div class="orow"><span>Total Pesanan</span><span>${fmt(t)}</span></div><div class="orow"><span>DP (${DP_PCT}%)</span><span style="color:var(--gold-light)">${fmt(d)}</span></div><div class="orow orow-total"><span>Sisa Pelunasan</span><span>${fmt(t-d)}</span></div></div>
-  <button class="btn-primary" id="pesanBtn" onclick="submitOrder()" disabled>🛍 Kirim Pesanan <span id="pesanLoad" style="display:none">⏳</span></button>
-  <button class="btn-ghost" onclick="oGoStep(1)">← Ubah Menu</button>`;
+  const summaryBox = payMethod==='cash'
+    ? `<div class="order-box" style="margin-top:1.4rem;"><div class="orow"><span>Total Pesanan</span><span>${fmt(t)}</span></div><div class="orow orow-total"><span>Bayar Lunas (Tunai)</span><span>${fmt(t)}</span></div></div>`
+    : `<div class="order-box" style="margin-top:1.4rem;"><div class="orow"><span>Total Pesanan</span><span>${fmt(t)}</span></div><div class="orow"><span>DP (${DP_PCT}%)</span><span style="color:var(--gold-light)">${fmt(d)}</span></div><div class="orow orow-total"><span>Sisa Pelunasan</span><span>${fmt(t-d)}</span></div></div>`;
+  h += summaryBox;
+  h+=`<button class="btn-primary" id="pesanBtn" onclick="submitOrder()" disabled>Kirim Pesanan</button>
+  <button class="btn-ghost" onclick="oGoStep(1)">Ubah Menu</button>`;
   return h;
 }
 
 function selPay(m){
   payMethod=m; renderOrder(); checkData();
-  
-  if(m === 'qris') {
-    fetch('/qris/' + oDp())
-      .then(r=>r.json())
-      .then(res=>{
-        const qc = document.getElementById('qrisContainer');
-        if(!qc) return;
-        if(res.error) {
-           qc.innerHTML = `<div style="color:var(--maroon);text-align:center;padding:1rem;">${res.error}</div>`;
-        } else {
-           qc.innerHTML = `<img src="${res.qr_image}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">`;
-        }
-      })
-      .catch(err => {
-        const qc = document.getElementById('qrisContainer');
-        if(qc) qc.innerHTML = `<div style="color:red;padding:1rem;">Gagal memuat QRIS</div>`;
-      });
-  }
   if(m === 'bank') {
     fetch('/bank-info')
       .then(r => r.json())
@@ -169,9 +151,12 @@ function handleFile(e){
 function checkData(){
   const btn = document.getElementById('pesanBtn');
   if(!btn) return;
-  const validName = cName.trim().length >= 3;
-  const validPhone = cPhone.trim().length >= 10;
-  if(validName && validPhone && payMethod && uploaded) {
+  const validName    = cName.trim().length >= 3;
+  const validPhone   = cPhone.trim().length >= 10;
+  const validAddress = cAddress.trim().length >= 5;
+  const validDate    = cDate.trim().length > 0;
+  const validProof   = payMethod === 'cash' ? true : !!uploaded;
+  if(validName && validPhone && validAddress && validDate && payMethod && validProof) {
     btn.disabled = false;
   } else {
     btn.disabled = true;
@@ -187,10 +172,13 @@ function submitOrder(){
   
   const fd = new FormData();
   fd.append('_token', window.CSRF_TOKEN || document.querySelector('meta[name="csrf-token"]')?.content || '');
-  fd.append('customer_name', cName);
-  fd.append('customer_phone', cPhone);
-  fd.append('payment_method', payMethod);
-  fd.append('payment_proof', uploaded);
+  fd.append('customer_name',    cName);
+  fd.append('customer_phone',   cPhone);
+  fd.append('customer_address', cAddress);
+  fd.append('event_date',       cDate);
+  fd.append('payment_method',   payMethod);
+  // Bukti hanya diperlukan untuk transfer bank
+  if(payMethod === 'bank' && uploaded) fd.append('payment_proof', uploaded);
   
   let itemIdx = 0;
   MENUS.filter(m=>qty[m.id]>0).forEach(m => {
@@ -207,10 +195,13 @@ function submitOrder(){
   .then(res => {
      if(res.order_number) {
        lastOrderNumber = res.order_number;
+       lastPayMethod   = res.payment_method || payMethod;
+       lastTotal       = res.total_amount   || oTotal();
+       lastDp          = res.dp_amount      || oDp();
        oStep = 3;
        renderOrder();
      } else if(res.errors || res.error) {
-       alert("Error: " + JSON.stringify(res.errors || res.error));
+       alert('Error: ' + JSON.stringify(res.errors || res.error));
        btn.disabled = false;
        document.getElementById('pesanLoad').style.display = 'none';
      }
@@ -223,15 +214,33 @@ function submitOrder(){
 }
 
 function oS3(){
-  const t=oTotal(),d=oDp();
-  let rows=MENUS.filter(m=>qty[m.id]>0).map(m=>`<div class="orow"><span>${m.emoji} ${m.name} ×${qty[m.id]}</span><span>${fmt(m.price*qty[m.id])}</span></div>`).join('');
-  return`<div class="success-wrap"><div class="success-ico">🎉</div><div class="success-ttl">Pesanan Terkirim!</div><div class="success-sub">Order ID: <strong>${lastOrderNumber}</strong><br>Terima kasih! Tim Markesot akan segera memproses.</div>
-  <div class="order-box" style="margin-bottom:1.2rem;">${rows}<div class="orow orow-total"><span>Total</span><span>${fmt(t)}</span></div><div class="orow" style="color:rgba(255,255,255,.72)"><span>DP dibayar</span><span>${fmt(d)}</span></div><div class="orow" style="color:rgba(255,255,255,.72)"><span>Sisa lunas</span><span>${fmt(t-d)}</span></div></div>
-  <a href="/pay/${lastOrderNumber}" style="display:block;margin-bottom:1.2rem;background:#fdf4ec;border-radius:13px;padding:1rem;font-size:.84rem;color:var(--text-light);line-height:1.65;text-decoration:none;">🔗 Klik di sini untuk ke <strong>Halaman Status Pembayaran / Struk</strong></a>
-  <button class="btn-primary" onclick="window.location.reload()">Selesai & Tutup</button></div>`;
+  const t = lastTotal || oTotal();
+  const d = lastDp   || oDp();
+  const isCash = lastPayMethod === 'cash';
+  let rows = MENUS.filter(m=>qty[m.id]>0).map(m=>`<div class="orow"><span>${m.name} ×${qty[m.id]}</span><span>${fmt(m.price*qty[m.id])}</span></div>`).join('');
+
+  const paymentInfo = isCash
+    ? `<div class="orow orow-total"><span>Total Pesanan</span><span>${fmt(t)}</span></div>
+       <div class="orow" style="color:rgba(255,255,255,.85);font-size:.82rem;"><span>Pembayaran</span><span>Tunai saat pengambilan</span></div>`
+    : `<div class="orow orow-total"><span>Total Pesanan</span><span>${fmt(t)}</span></div>
+       <div class="orow" style="color:rgba(255,255,255,.72)"><span>DP ditransfer</span><span>${fmt(d)}</span></div>
+       <div class="orow" style="color:rgba(255,255,255,.72)"><span>Sisa saat pengambilan</span><span>${fmt(t-d)}</span></div>`;
+
+  const payNote = isCash
+    ? `<div style="background:#eaf7f1;border:1px solid rgba(30,127,81,.25);border-radius:13px;padding:1rem;font-size:.84rem;color:var(--green);line-height:1.65;margin-bottom:1.2rem;text-align:center;"><strong>Bayar lunas (${fmt(t)})</strong> saat pengambilan pesanan.</div>`
+    : `<div style="background:#fdf4ec;border-radius:13px;padding:1rem;font-size:.84rem;color:var(--text-light);line-height:1.65;margin-bottom:1.2rem;text-align:center;">DP <strong>${fmt(d)}</strong> sedang diverifikasi admin. Sisa <strong>${fmt(t-d)}</strong> dibayar saat pengambilan.</div>`;
+
+  return `<div class="success-wrap">
+    <div class="success-ico"><img src="/images/icons/success.png" class="icon-img" style="width:80px;height:80px;object-fit:contain;" alt="Sukses" onerror="this.parentElement.textContent='OK'"></div>
+    <div class="success-ttl">Pesanan Terkirim!</div>
+    <div class="success-sub">Order ID: <strong>${lastOrderNumber}</strong><br>Terima kasih! Tim Markesot akan segera memproses.</div>
+    <div class="order-box" style="margin-bottom:1.2rem;">${rows}${paymentInfo}</div>
+    ${payNote}
+    <button class="btn-primary" onclick="window.location.reload()">Selesai</button>
+  </div>`;
 }
 
-function resetOrder(){MENUS.forEach(m=>qty[m.id]=0);payMethod=null;uploaded=null;oStep=1;cName='';cPhone='';closeOrder();}
+function resetOrder(){MENUS.forEach(m=>qty[m.id]=0);payMethod=null;uploaded=null;oStep=1;cName='';cPhone='';cAddress='';cDate='';closeOrder();}
 
 /* ═══════════════════════════════════════
    DSS / AHP SYSTEM

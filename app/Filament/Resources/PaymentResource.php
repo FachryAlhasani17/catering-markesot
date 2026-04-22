@@ -54,7 +54,6 @@ class PaymentResource extends Resource
                     ->label('Metode Pembayaran')
                     ->options([
                         'transfer' => 'Transfer Bank',
-                        'qris'     => 'QRIS',
                         'cash'     => 'Tunai',
                     ])
                     ->nullable(),
@@ -137,7 +136,6 @@ class PaymentResource extends Resource
                     ->label('Metode')
                     ->formatStateUsing(fn ($state) => match ($state) {
                         'transfer' => 'Transfer Bank',
-                        'qris'     => 'QRIS',
                         'cash'     => 'Tunai',
                         default    => $state ?? '—',
                     }),
