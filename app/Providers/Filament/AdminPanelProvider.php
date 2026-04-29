@@ -28,6 +28,7 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
+            ->brandName('Catering Markesot')
             ->colors([
                 'primary' => Color::Amber,
             ])

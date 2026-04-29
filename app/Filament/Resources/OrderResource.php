@@ -277,6 +277,23 @@ class OrderResource extends Resource
                     ->money('IDR')
                     ->sortable(),
 
+                Tables\Columns\TextColumn::make('payments.payment_method')
+                    ->label('Tipe Bayar')
+                    ->badge()
+                    ->formatStateUsing(function ($state, $record) {
+                        $method = $record->payments()->latest()->first()?->payment_method ?? $state;
+                        if ($method === 'cash') return 'Tunai';
+                        if ($method === 'bank' && $record->dp_percentage >= 100) return 'Transfer Lunas';
+                        if ($method === 'bank') return 'DP Transfer';
+                        return $method;
+                    })
+                    ->color(function ($state, $record) {
+                        $method = $record->payments()->latest()->first()?->payment_method ?? $state;
+                        if ($method === 'cash') return 'success';
+                        if ($method === 'bank' && $record->dp_percentage >= 100) return 'info';
+                        return 'warning';
+                    }),
+
                 Tables\Columns\TextColumn::make('status')
                     ->label('Status')
                     ->badge()
@@ -347,31 +364,81 @@ class OrderResource extends Resource
                 \Filament\Actions\ViewAction::make(),
                 \Filament\Actions\EditAction::make(),
 
-                \Filament\Actions\Action::make('confirm')
-                    ->label('Konfirmasi')
-                    ->icon('heroicon-o-check-circle')
+                \Filament\Actions\Action::make('verify')
+                    ->label('Verifikasi')
+                    ->icon('heroicon-o-check-badge')
                     ->color('success')
-                    ->requiresConfirmation()
-                    ->visible(fn (Order $record) => $record->status === Order::STATUS_DP_PAID)
-                    ->action(function (Order $record) {
-                        app(OrderService::class)->confirm($record);
-                        Notification::make()->title('Pesanan dikonfirmasi!')->success()->send();
+                    ->modalHeading('Verifikasi Pembayaran')
+                    ->visible(fn (Order $record) => $record->status === 'pending')
+                    ->form(function(Order $record) {
+                        $payment = $record->payments()->latest()->first();
+                        $isCash = $payment?->payment_method === 'cash';
+
+                        $components = [
+                            \Filament\Forms\Components\Placeholder::make('info')
+                                ->label('Metode Pembayaran')
+                                ->content($isCash ? 'Tunai (Bayar Penuh di Tempat)' : 'Transfer Bank'),
+                            
+                            \Filament\Forms\Components\Placeholder::make('amount')
+                                ->label('Jumlah Pembayaran yang Dilaporkan')
+                                ->content('Rp ' . number_format($payment?->amount ?? 0, 0, ',', '.')),
+                        ];
+
+                        if (!$isCash && $payment?->proof_image) {
+                            $components[] = \Filament\Forms\Components\Placeholder::make('proof')
+                                ->label('Bukti Transfer')
+                                ->content(new \Illuminate\Support\HtmlString('<img src="' . asset('storage/' . $payment->proof_image) . '" style="max-width:100%; border-radius:8px; border:1px solid #ddd;" />'));
+                        } elseif (!$isCash) {
+                            $components[] = \Filament\Forms\Components\Placeholder::make('proof_missing')
+                                ->label('Bukti Transfer')
+                                ->content(new \Illuminate\Support\HtmlString('<span style="color:red;">Belum ada bukti transfer yang diunggah.</span>'));
+                        }
+
+                        $components[] = \Filament\Forms\Components\Select::make('action')
+                            ->label('Keputusan')
+                            ->options([
+                                'approve' => 'Terima Pembayaran',
+                                'reject' => 'Tolak Pembayaran',
+                            ])
+                            ->required()
+                            ->live();
+
+                        $components[] = \Filament\Forms\Components\Textarea::make('rejection_reason')
+                            ->label('Alasan Penolakan')
+                            ->visible(fn ($get) => $get('action') === 'reject')
+                            ->required(fn ($get) => $get('action') === 'reject');
+
+                        return $components;
+                    })
+                    ->action(function (Order $record, array $data) {
+                        $payment = $record->payments()->latest()->first();
+                        
+                        if ($data['action'] === 'approve') {
+                            if ($payment) {
+                                $payment->update(['status' => 'verified', 'verified_by' => auth()->id(), 'verified_at' => now()]);
+                            }
+                            app(OrderService::class)->confirm($record);
+                            Notification::make()->title('Pembayaran diverifikasi! Pesanan dikonfirmasi.')->success()->send();
+                        } else {
+                            if ($payment) {
+                                $payment->update(['status' => 'rejected', 'rejection_reason' => $data['rejection_reason']]);
+                            }
+                            app(OrderService::class)->cancel($record, $data['rejection_reason']);
+                            Notification::make()->title('Pembayaran ditolak! Pesanan dibatalkan.')->danger()->send();
+                        }
                     }),
 
-                \Filament\Actions\Action::make('cancel')
-                    ->label('Batalkan')
-                    ->icon('heroicon-o-x-circle')
-                    ->color('danger')
+                \Filament\Actions\Action::make('complete')
+                    ->label('Selesai')
+                    ->icon('heroicon-o-check-circle')
+                    ->color('info')
                     ->requiresConfirmation()
-                    ->visible(fn (Order $record) => !in_array($record->status, [Order::STATUS_COMPLETED, Order::STATUS_CANCELLED]))
-                    ->form([
-                        Textarea::make('cancellation_reason')
-                            ->label('Alasan Pembatalan')
-                            ->required(),
-                    ])
-                    ->action(function (Order $record, array $data) {
-                        app(OrderService::class)->cancel($record, $data['cancellation_reason']);
-                        Notification::make()->title('Pesanan dibatalkan.')->warning()->send();
+                    ->modalHeading('Tandai Selesai')
+                    ->modalDescription('Apakah Anda yakin pesanan ini sudah selesai dan siap diambil/diantar?')
+                    ->visible(fn (Order $record) => in_array($record->status, ['confirmed', 'dp_paid']))
+                    ->action(function (Order $record) {
+                        $record->update(['status' => 'completed']);
+                        Notification::make()->title('Pesanan ditandai selesai!')->success()->send();
                     }),
             ])
             ->bulkActions([
@@ -379,6 +446,11 @@ class OrderResource extends Resource
                     \Filament\Actions\DeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    public static function canCreate(): bool
+    {
+        return false;
     }
 
     public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder

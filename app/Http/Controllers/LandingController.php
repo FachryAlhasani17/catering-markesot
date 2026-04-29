@@ -14,7 +14,21 @@ class LandingController extends Controller
 {
     public function index(SettingService $settingService)
     {
-        $menus = MenuItem::with('category')->where('is_available', true)->get()->map(function ($q) {
+        $bestSellerCount = $settingService->bestSellerCount();
+        
+        $bestSellerIds = \App\Models\OrderItem::select('menu_item_id', \Illuminate\Support\Facades\DB::raw('SUM(quantity) as total_qty'))
+            ->groupBy('menu_item_id')
+            ->orderByDesc('total_qty')
+            ->take($bestSellerCount > 0 ? $bestSellerCount : 1)
+            ->pluck('menu_item_id')
+            ->toArray();
+
+        $menus = MenuItem::with('category')
+            ->where('is_available', true)
+            ->whereHas('category', function ($query) {
+                $query->where('is_active', true);
+            })
+            ->get()->map(function ($q) use ($bestSellerIds) {
             $notes = json_decode($q->notes, true) ?? [];
             return [
                 'id'      => $q->id,
@@ -22,6 +36,7 @@ class LandingController extends Controller
                 'emoji'   => $notes['emoji'] ?? '🍽️',
                 'price'   => $q->price,
                 'cat'     => str_contains(strtolower($q->category?->name ?? ''), 'minuman') ? 'drink' : 'food',
+                'category_name' => $q->category?->name ?? 'Lainnya',
                 'harga'   => $notes['harga']   ?? rand(3, 5),
                 'rasa'    => $notes['rasa']    ?? rand(3, 5),
                 'sehat'   => $notes['sehat']   ?? rand(3, 5),
@@ -29,6 +44,7 @@ class LandingController extends Controller
                 'tags'    => $notes['tags']    ?? ['Enak', 'Segar'],
                 'desc'    => $q->description   ?? 'Nikmati hidangan lezat dan segar...',
                 'image'   => $q->image ? asset('storage/' . $q->image) : null,
+                'is_best_seller' => in_array($q->id, $bestSellerIds),
             ];
         });
 
@@ -39,7 +55,7 @@ class LandingController extends Controller
 
     public function store(Request $request, SettingService $settingService)
     {
-        $validated = $request->validate([
+        $rules = [
             'customer_name'    => 'required|min:3',
             'customer_phone'   => 'required',
             'customer_address' => 'required|min:5',
@@ -49,7 +65,34 @@ class LandingController extends Controller
             'items'            => 'required|array|min:1',
             'items.*.menu_item_id' => 'required|exists:menu_items,id',
             'items.*.qty'      => 'required|integer|min:1',
-        ]);
+            'items.*.notes'    => 'nullable|string|max:500',
+        ];
+
+        if (!auth()->check()) {
+            $rules['email']    = 'required|email';
+            $rules['password'] = 'required|min:4';
+        }
+
+        $validated = $request->validate($rules);
+
+        if (!auth()->check()) {
+            $user = \App\Models\User::where('email', $validated['email'])->first();
+            if ($user) {
+                if (!\Illuminate\Support\Facades\Hash::check($validated['password'], $user->password)) {
+                    return response()->json(['error' => 'Password salah untuk email ini.'], 422);
+                }
+            } else {
+                $user = \App\Models\User::create([
+                    'name'     => $validated['customer_name'],
+                    'email'    => $validated['email'],
+                    'phone'    => $validated['customer_phone'],
+                    'address'  => $validated['customer_address'],
+                    'password' => bcrypt($validated['password']),
+                    'role'     => 'buyer',
+                ]);
+            }
+            auth()->login($user);
+        }
 
         $isCash = ($validated['payment_method'] === 'cash');
 
@@ -60,11 +103,13 @@ class LandingController extends Controller
             $order->customer_name    = $validated['customer_name'];
             $order->customer_phone   = $validated['customer_phone'];
             $order->customer_address = $validated['customer_address'];
+            $order->customer_email   = auth()->user()->email;
             $order->event_date       = $validated['event_date'];
             $order->status           = 'pending';
-            // Cash = bayar full (100%) → dp_percentage 100 agar observer menghitung dp_amount = total
-            // Bank = bayar DP sesuai setting
-            $order->dp_percentage  = $isCash ? 100 : $settingService->dpPercentage();
+            // Cash = bayar full (100%)
+            // Bank = bayar DP sesuai setting, atau full jika bank_pay_full
+            $bankPayFull = $request->input('bank_pay_full') === '1';
+            $order->dp_percentage  = ($isCash || $bankPayFull) ? 100 : $settingService->dpPercentage();
             $order->total_amount   = 0;
             $order->save(); // Observer auto-generate order_number
 
@@ -76,10 +121,11 @@ class LandingController extends Controller
 
                 $order->orderItems()->create([
                     'menu_item_id' => $menu->id,
-                    'item_name'    => $menu->name,
-                    'item_price'   => $menu->price,
-                    'qty'          => $item['qty'],
+                    'menu_name'    => $menu->name,
+                    'menu_price'   => $menu->price,
+                    'quantity'     => $item['qty'],
                     'subtotal'     => $subtotal,
+                    'notes'        => $item['notes'] ?? null,
                 ]);
             }
 
@@ -129,5 +175,14 @@ class LandingController extends Controller
     public function bankInfo(SettingService $settingService)
     {
         return response()->json($settingService->bankInfo());
+    }
+
+    public function myOrders()
+    {
+        $orders = Order::with('orderItems')
+            ->where('customer_email', auth()->user()->email)
+            ->orderBy('created_at', 'desc')
+            ->get();
+        return view('landing.my_orders', compact('orders'));
     }
 }

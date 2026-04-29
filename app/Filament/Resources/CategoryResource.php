@@ -32,6 +32,7 @@ class CategoryResource extends Resource
                 TextInput::make('name')
                     ->label('Nama Kategori')
                     ->required()
+                    ->unique(ignoreRecord: true)
                     ->maxLength(255),
 
                 Textarea::make('description')

@@ -43,6 +43,7 @@ class MenuItemResource extends Resource
                 TextInput::make('name')
                     ->label('Nama Menu')
                     ->required()
+                    ->unique(ignoreRecord: true)
                     ->maxLength(255),
 
                 Textarea::make('description')
@@ -77,6 +78,7 @@ class MenuItemResource extends Resource
                     ->label('Foto Menu')
                     ->image()
                     ->imageEditor()
+                    ->disk('public')
                     ->directory('menu-images')
                     ->visibility('public')
                     ->columnSpanFull(),

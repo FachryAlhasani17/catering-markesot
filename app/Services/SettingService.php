@@ -48,6 +48,14 @@ class SettingService
     }
 
     /**
+     * Ambil jumlah menu best seller.
+     */
+    public function bestSellerCount(): int
+    {
+        return (int) $this->get('best_seller_count', 1);
+    }
+
+    /**
      * Ambil informasi rekening bank.
      */
     public function bankInfo(): array

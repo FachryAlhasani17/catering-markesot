@@ -31,6 +31,7 @@ class ManageSettings extends Page
             'account_name'     => $settings->get('account_name')?->value ?? '',
             'payment_qris_string' => $settings->get('payment_qris_string')?->value ?? '',
             'qr_payment_image' => $settings->get('qr_payment_image')?->value ?? '',
+            'best_seller_count' => $settings->get('best_seller_count')?->value ?? 1,
         ];
 
         $this->form->fill($this->data);
@@ -103,6 +104,17 @@ class ManageSettings extends Page
                             ->label('Nama Pemilik Rekening')
                             ->maxLength(255),
                     ])->columns(3),
+                \Filament\Schemas\Components\Section::make('Tampilan Landing Page')
+                    ->icon('heroicon-o-computer-desktop')
+                    ->schema([
+                        \Filament\Forms\Components\TextInput::make('best_seller_count')
+                            ->label('Jumlah Menu Best Seller')
+                            ->required()
+                            ->numeric()
+                            ->minValue(0)
+                            ->default(1)
+                            ->helperText('Tentukan berapa banyak menu yang akan ditampilkan sebagai Best Seller.'),
+                    ])->columns(1),
             ])
             ->statePath('data');
     }

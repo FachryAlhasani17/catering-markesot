@@ -17,12 +17,27 @@ const fmt=n=>'Rp '+n.toLocaleString('id-ID');
 const DP_PCT = window.DP_PCT || 50;
 let qty={},oStep=1,payMethod=null,uploaded=null;
 MENUS.forEach(m=>qty[m.id]=0);
+const storedQty = localStorage.getItem('mk_cart_qty');
+if (storedQty) {
+  try { Object.assign(qty, JSON.parse(storedQty)); } catch(e){}
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  if(localStorage.getItem('mk_auto_open') === '1') {
+     localStorage.removeItem('mk_auto_open');
+     setTimeout(openOrder, 500); 
+  }
+});
+
 const oTotal=()=>MENUS.reduce((s,m)=>s+m.price*(qty[m.id]||0),0);
 const oDp=()=>Math.round(oTotal()*DP_PCT/100);
 
 function openOrder(){
   oStep=1;payMethod=null;uploaded=null;
-  MENUS.forEach(m=>qty[m.id]=0);
+  cName = window.USER_NAME || '';
+  cPhone = window.USER_PHONE || '';
+  cAddress = window.USER_ADDRESS || '';
+  cEmail = window.USER_EMAIL || '';
   document.getElementById('orderOverlay').classList.add('open');
   document.body.style.overflow='hidden';
   renderOrder();
@@ -35,9 +50,25 @@ function closeOrder(){
 function renderOrder(){
   updateOrderSteps();
   const b=document.getElementById('orderBody');
-  if(oStep===1)b.innerHTML=oS1();
-  else if(oStep===2)b.innerHTML=oS2();
-  else b.innerHTML=oS3();
+  if(oStep===1) {
+    b.innerHTML=oS1();
+  } else if(oStep===2) {
+    b.innerHTML=oS2();
+    if (payMethod === 'bank') {
+      if (bankInfoCache) {
+        setTimeout(updateBankDOM, 10);
+      } else {
+        fetch('/bank-info')
+          .then(r => r.json())
+          .then(res => {
+            bankInfoCache = res;
+            updateBankDOM();
+          });
+      }
+    }
+  } else {
+    b.innerHTML=oS3();
+  }
   setTimeout(animW,80);
 }
 
@@ -54,44 +85,182 @@ function updateOrderSteps(){
   document.getElementById('orderTitle').textContent=titles[oStep];
 }
 
+let itemNotes = {};
+const storedNotes = localStorage.getItem('mk_cart_notes');
+if (storedNotes) { try { Object.assign(itemNotes, JSON.parse(storedNotes)); } catch(e){} }
+
 function oS1(){
-  let h=`<div class="menu-cat-label"><img src="/images/icons/food.png" class="cat-icon" alt="" onerror="this.style.display='none'"> Makanan</div>`;
-  MENUS.filter(m=>m.cat==='food').forEach(m=>h+=mRow(m));
-  h+=`<div class="menu-cat-label"><img src="/images/icons/drink.png" class="cat-icon" alt="" onerror="this.style.display='none'"> Minuman</div>`;
-  MENUS.filter(m=>m.cat==='drink').forEach(m=>h+=mRow(m));
-  const t=oTotal(),has=t>0;
-  if(has){
-    h+=`<div class="order-box">`;
-    MENUS.filter(m=>qty[m.id]>0).forEach(m=>{h+=`<div class="orow"><span>${m.name} ×${qty[m.id]}</span><span>${fmt(m.price*qty[m.id])}</span></div>`;});
-    h+=`<div class="orow orow-total"><span>Total</span><span>${fmt(t)}</span></div></div>`;
-  }else{h+=`<div class="empty-note">Belum ada menu yang dipilih</div>`;}
-  h+=`<button class="btn-primary" onclick="oGoStep(2)" ${!has?'disabled':''}>Lanjut ke Pembayaran</button>`;
+  const ordered = MENUS.filter(m => qty[m.id] > 0);
+  const t = oTotal(), has = t > 0;
+
+  let h = '';
+
+  if (!has) {
+    h += `<div style="text-align:center;padding:2.5rem 1rem;">
+      <div style="font-size:3rem;margin-bottom:0.8rem;">🛒</div>
+      <div style="font-weight:700;font-size:1.1rem;color:#333;margin-bottom:0.4rem;">Keranjang Masih Kosong</div>
+      <div style="font-size:0.85rem;color:#888;line-height:1.5;">Pilih menu favorit Anda dari halaman utama, lalu kembali ke sini untuk melanjutkan pesanan.</div>
+    </div>`;
+  } else {
+    // Group ordered items by category
+    const cats = {};
+    ordered.forEach(m => {
+      const c = m.category_name || (m.cat === 'drink' ? 'Minuman' : 'Makanan');
+      if(!cats[c]) cats[c] = [];
+      cats[c].push(m);
+    });
+
+    for (const [catName, items] of Object.entries(cats)) {
+      h += `<div class="menu-cat-label"><span style="font-weight:700;">${catName}</span></div>`;
+      items.forEach(m => h += mRow(m));
+    }
+
+    h += `<div class="order-box"><div style="font-weight:700;font-size:0.9rem;margin-bottom:0.6rem;color:#333;">Ringkasan Pesanan</div>`;
+    ordered.forEach(m => {
+      const note = itemNotes[m.id] || '';
+      h += `<div style="border-bottom:1px solid #f0f0f0;padding:0.6rem 0;">
+        <div class="orow"><span>${m.name} ×${qty[m.id]}</span><span>${fmt(m.price*qty[m.id])}</span></div>
+        <input type="text" placeholder="Catatan: pedas, tanpa sayur, dll." value="${note}" 
+          oninput="itemNotes[${m.id}]=this.value;localStorage.setItem('mk_cart_notes',JSON.stringify(itemNotes))" 
+          style="width:100%;border:1px solid #e8e8e8;border-radius:8px;padding:0.4rem 0.6rem;font-size:0.78rem;margin-top:0.4rem;color:#555;outline:none;box-sizing:border-box;"
+        >
+      </div>`;
+    });
+    h += `<div class="orow orow-total"><span>Total</span><span>${fmt(t)}</span></div></div>`;
+  }
+
+  h += `<button class="btn-primary" onclick="oGoStep(2)" ${!has?'disabled':''}>Lanjut ke Pembayaran</button>`;
+  if (has) {
+    h += `<button class="btn-ghost" onclick="closeOrder()" style="margin-top:0.5rem;">Tambah Menu Lagi</button>`;
+  }
   return h;
 }
 
 function mRow(m){
   const q=qty[m.id]||0;
-  return`<div class="menu-row"><div class="menu-emoji">${m.emoji}</div><div class="menu-info"><div class="menu-row-name">${m.name}</div><div class="menu-row-price">${fmt(m.price)}</div></div><div class="qty-wrap"><button class="qty-btn" onclick="chgQty(${m.id},-1)" ${q===0?'disabled':''}>−</button><div class="qty-val">${q}</div><button class="qty-btn" onclick="chgQty(${m.id},1)">+</button></div></div>`;
+  const imgStyle = m.image 
+    ? `background-image:url('${m.image}');background-size:cover;background-position:center;` 
+    : `background:linear-gradient(135deg,#f5e4be,#e8c97a);display:flex;align-items:center;justify-content:center;font-size:1.5rem;`;
+  return`<div class="menu-row">
+    <div style="width:44px;height:44px;border-radius:10px;overflow:hidden;flex-shrink:0;${imgStyle}">${m.image?'':m.emoji}</div>
+    <div class="menu-info"><div class="menu-row-name">${m.name}</div><div class="menu-row-price">${fmt(m.price)}</div></div>
+    <div class="qty-wrap"><button class="qty-btn" onclick="chgQty(${m.id},-1)" ${q===0?'disabled':''}>−</button><div class="qty-val">${q}</div><button class="qty-btn" onclick="chgQty(${m.id},1)">+</button></div>
+  </div>`;
 }
 
-function chgQty(id,d){qty[id]=Math.max(0,(qty[id]||0)+d);renderOrder();}
+function chgQty(id,d){
+  qty[id]=Math.max(0,(qty[id]||0)+d);
+  localStorage.setItem('mk_cart_qty', JSON.stringify(qty));
+  renderOrder();
+  if (typeof renderLandingSteppers === 'function') renderLandingSteppers();
+}
 function oGoStep(n){oStep=n;if(n===2){payMethod=null;uploaded=null;}renderOrder();}
 
-let cName='', cPhone='', cAddress='', cDate='',
+function addLandingItem(id) {
+    chgQty(id, 1);
+}
+
+function renderLandingSteppers() {
+    if (!window.APP_MENUS) return;
+    
+    window.APP_MENUS.forEach(m => {
+        const q = qty[m.id] || 0;
+        const stepperWrap = document.getElementById(`stepper-${m.id}`);
+        if (!stepperWrap) return;
+        
+        const btnInit = stepperWrap.querySelector('.add-btn-init');
+        const stepper = stepperWrap.querySelector('.stepper-controls');
+        const disp = stepperWrap.querySelector('.qty-display');
+        
+        if (btnInit && stepper && disp) {
+            if (q > 0) {
+                btnInit.style.display = 'none';
+                stepper.style.display = 'flex';
+                disp.innerText = q;
+            } else {
+                btnInit.style.display = 'block';
+                stepper.style.display = 'none';
+            }
+        }
+    });
+
+    const uniqueItemsCount = Object.keys(qty).filter(k => qty[k] > 0).length;
+    let badge = document.getElementById('cart-badge');
+    if (!badge) {
+        const fab = document.querySelector('.fab-order');
+        if (fab) {
+            badge = document.createElement('div');
+            badge.id = 'cart-badge';
+            badge.className = 'cart-badge';
+            fab.appendChild(badge);
+        }
+    }
+    
+    if (badge) {
+        if (uniqueItemsCount > 0) {
+            const prevCount = parseInt(badge.innerText || '0');
+            badge.innerText = uniqueItemsCount;
+            badge.style.display = 'flex';
+            
+            if (prevCount !== uniqueItemsCount) {
+                badge.classList.remove('pop');
+                void badge.offsetWidth; 
+                badge.classList.add('pop');
+            }
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+}
+
+let cName='', cPhone='', cAddress='', cDate='', cEmail='', cPassword='',
     lastOrderNumber='', lastPayMethod='', lastTotal=0, lastDp=0;
+let bankPayFull = false;
 
 function oS2(){
-  const t=oTotal(), d=oDp();
-  const today = new Date().toISOString().split('T')[0];
+  if (!window.IS_LOGGED_IN) {
+    return `<div style="text-align:center; padding: 2rem 1rem; margin-top: 1rem; border-radius: 12px;">
+      <div style="font-size: 3rem; margin-bottom: 1rem;">🔒</div>
+      <h3 style="margin-bottom: 0.5rem; font-size: 1.3rem; color: #333;">Silakan Login Terlebih Dahulu</h3>
+      <p style="color: var(--text-light); margin-bottom: 2rem; font-size: 0.95rem; line-height: 1.5;">Anda harus masuk ke akun Anda untuk menyelesaikan pesanan dan melanjutkan pembayaran.</p>
+      
+      <button type="button" onclick="localStorage.setItem('mk_auto_open','1'); window.location.href=window.GOOGLE_LOGIN_URL" style="width: 100%; background:white;border:1px solid #ddd;padding:0.9rem;border-radius:10px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:0.6rem;cursor:pointer;margin-bottom:1rem;box-shadow: 0 2px 4px rgba(0,0,0,0.03); font-size: 0.95rem;">
+        <svg width="22" height="22" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>
+        Login dengan Google
+      </button>
 
-  let h = `<div class="dp-banner"><div class="dp-ico"><img src="/images/icons/info.png" class="icon-img" alt="" onerror="this.style.display='none'"></div><div class="dp-info"><h4>Kebijakan DP ${DP_PCT}%</h4><p>DP ditetapkan admin. Pelunasan saat pengambilan.</p></div><div class="dp-right"><div class="dp-num">${fmt(d)}</div><div class="dp-lbl">DP yang dibayar</div></div></div>
+      <button type="button" onclick="localStorage.setItem('mk_auto_open','1'); window.location.href=window.LOGIN_URL" class="btn-primary" style="width: 100%; display:flex; align-items:center; justify-content:center; gap: 0.5rem; padding: 0.9rem; border-radius: 10px; font-size: 0.95rem;">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+        Login dengan Akun (Email)
+      </button>
+      
+      <div style="font-size: 0.95rem; color: #666; margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #eee;">
+        Belum punya akun? <br>
+        <a href="${window.LOGIN_URL}" onclick="localStorage.setItem('mk_auto_open','1')" style="color: var(--maroon); font-weight: 700; text-decoration: underline; display: inline-block; margin-top: 0.5rem; font-size: 1rem;">Daftar di sini</a>
+      </div>
+      
+      <button class="btn-ghost" onclick="oGoStep(1)" style="margin-top: 1.5rem;">Kembali ke Menu</button>
+    </div>`;
+  }
+
+  if(!cName && window.USER_NAME) cName = window.USER_NAME;
+  if(!cPhone && window.USER_PHONE) cPhone = window.USER_PHONE;
+  if(!cAddress && window.USER_ADDRESS) cAddress = window.USER_ADDRESS;
+
+  const t=oTotal(), d=oDp();
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  const minDateTime = now.toISOString().slice(0,16);
+
+  let h = `<div class="dp-banner"><div class="dp-ico"><img src="/images/icons/info.png" class="icon-img" alt="" onerror="this.style.display='none'"></div><div class="dp-info"><h4>Kebijakan DP ${DP_PCT}%</h4><p>DP ditetapkan admin. Pelunasan saat pengambilan.</p></div><div class="dp-right"><div class="dp-num">${fmt(d)}</div><div class="dp-lbl">DP minimum</div></div></div>
   <div class="form-section">
     <div class="form-section-label">Data Pemesan</div>
     <input type="text" id="custName" placeholder="Nama Lengkap (min. 3 karakter)" value="${cName}" oninput="cName=this.value;checkData()" class="cust-input">
     <input type="tel" id="custPhone" placeholder="No. WhatsApp (contoh: 08123...)" value="${cPhone}" oninput="cPhone=this.value;checkData()" class="cust-input">
     <textarea id="custAddress" placeholder="Alamat lengkap (untuk pengambilan / pengiriman)" oninput="cAddress=this.value;checkData()" class="cust-input cust-textarea" rows="2">${cAddress}</textarea>
-    <label class="cust-label">Tanggal Pesanan Dibutuhkan</label>
-    <input type="date" id="custDate" value="${cDate}" min="${today}" oninput="cDate=this.value;checkData()" class="cust-input">
+    
+    <label class="cust-label" style="margin-top: 1.2rem;">Waktu Pesanan Dibutuhkan (Tanggal & Waktu)</label>
+    <input type="datetime-local" id="custDate" value="${cDate}" min="${minDateTime}" oninput="cDate=this.value;checkData()" class="cust-input">
   </div>
   <div class="form-section-label" style="margin-top:1.4rem;margin-bottom:.7rem;">Metode Pembayaran</div>
   <div class="pay-opts">
@@ -103,32 +272,51 @@ function oS2(){
     h+=`<div class="pay-detail"><h4>Informasi Pembayaran Tunai</h4><div style="background:var(--green-bg);border:1px solid rgba(30,127,81,.25);border-radius:12px;padding:1.1rem 1.2rem;"><div style="font-weight:700;font-size:.92rem;color:var(--green);margin-bottom:.3rem;">Bayar Lunas saat Pengambilan</div><div style="font-size:.78rem;color:var(--text-light);">Tidak diperlukan DP. Pembayaran dilakukan langsung di tempat.</div><div style="border-top:1px solid rgba(30,127,81,.2);padding-top:.7rem;margin-top:.7rem;display:flex;justify-content:space-between;align-items:center;"><span style="font-size:.82rem;color:var(--text-light);">Total yang dibayar</span><span style="font-size:1.15rem;font-weight:800;color:var(--green);">${fmt(t)}</span></div></div></div>`;
   }
   if(payMethod==='bank'){
-    h+=`<div class="pay-detail"><h4>Detail Rekening Bank</h4><div class="bank-line"><span class="bl-label">Bank</span><span class="bl-val" id="bankNameTxt">Loading...</span></div><div class="bank-line"><span class="bl-label">No. Rekening</span><span class="bl-val"><span id="bankAccTxt">Loading...</span> <button class="copy-btn" onclick="cp(document.getElementById('bankAccTxt').innerText)">Copy</button></span></div><div class="bank-line"><span class="bl-label">Atas Nama</span><span class="bl-val" id="bankHolderTxt">Loading...</span></div><div class="bank-line"><span class="bl-label">Nominal DP</span><span class="bl-val" style="color:var(--maroon)">${fmt(d)}</span></div></div>`;
-    h+=`<span class="upload-label">Upload Bukti Transfer</span><div class="upload-zone"><input type="file" accept="image/*" id="paymentFile" onchange="handleFile(event)"/><div class="upload-ico"><img src="/images/icons/upload.png" class="icon-img" alt="Upload" onerror="this.style.display='none'"></div><div class="upload-txt" id="uploadText">Klik atau seret foto bukti transfer</div><div class="upload-hint">JPG, PNG — maks. 5MB</div><img class="preview-img ${uploaded?'show':''}" id="prevImg" ${uploaded?`src="${uploaded.previewExt}"`:''}/>  </div>`;
+    const payAmt = bankPayFull ? t : d;
+    h+=`<div class="pay-detail"><h4>Opsi Pembayaran Transfer</h4>
+      <div style="display:flex;gap:0.6rem;margin-bottom:1.2rem;">
+        <div onclick="bankPayFull=false;renderOrder()" style="flex:1;padding:0.8rem;border-radius:12px;border:2px solid ${!bankPayFull?'var(--maroon)':'#ddd'};background:${!bankPayFull?'#fdf2f2':'#fff'};cursor:pointer;text-align:center;transition:all 0.2s;">
+          <div style="font-weight:700;font-size:0.9rem;color:${!bankPayFull?'var(--maroon)':'#555'};">Bayar DP</div>
+          <div style="font-size:0.78rem;color:#888;margin-top:0.2rem;">DP ${DP_PCT}% = ${fmt(d)}</div>
+          <div style="font-size:0.7rem;color:#aaa;margin-top:0.15rem;">Pelunasan saat ambil</div>
+        </div>
+        <div onclick="bankPayFull=true;renderOrder()" style="flex:1;padding:0.8rem;border-radius:12px;border:2px solid ${bankPayFull?'var(--maroon)':'#ddd'};background:${bankPayFull?'#fdf2f2':'#fff'};cursor:pointer;text-align:center;transition:all 0.2s;">
+          <div style="font-weight:700;font-size:0.9rem;color:${bankPayFull?'var(--maroon)':'#555'};">Bayar Lunas</div>
+          <div style="font-size:0.78rem;color:#888;margin-top:0.2rem;">Full ${fmt(t)}</div>
+          <div style="font-size:0.7rem;color:#aaa;margin-top:0.15rem;">Tidak ada sisa bayar</div>
+        </div>
+      </div>
+      <h4>Detail Rekening Bank</h4><div class="bank-line"><span class="bl-label">Bank</span><span class="bl-val" id="bankNameTxt">Loading...</span></div><div class="bank-line"><span class="bl-label">No. Rekening</span><span class="bl-val"><span id="bankAccTxt">Loading...</span> <button class="copy-btn" onclick="cp(document.getElementById('bankAccTxt').innerText)">Copy</button></span></div><div class="bank-line"><span class="bl-label">Atas Nama</span><span class="bl-val" id="bankHolderTxt">Loading...</span></div><div class="bank-line"><span class="bl-label">Nominal Transfer</span><span class="bl-val" style="color:var(--maroon);font-weight:800;">${fmt(payAmt)}</span></div></div>`;
+    h+=`<span class="upload-label">Upload Bukti Transfer</span><div class="upload-zone"><input type="file" accept="image/*" id="paymentFile" onchange="handleFile(event)"/><div class="upload-ico"><img src="/images/icons/upload.png" class="icon-img" alt="Upload" onerror="this.style.display='none'"></div><div class="upload-txt" id="uploadText">Klik atau seret foto bukti transfer</div><div class="upload-hint">JPG, PNG — maks. 5MB</div><img class="preview-img ${uploaded?'show':''}" id="prevImg" ${uploaded?`src="${uploaded.previewExt}"`:''}/></div>`;
   }
-  const summaryBox = payMethod==='cash'
-    ? `<div class="order-box" style="margin-top:1.4rem;"><div class="orow"><span>Total Pesanan</span><span>${fmt(t)}</span></div><div class="orow orow-total"><span>Bayar Lunas (Tunai)</span><span>${fmt(t)}</span></div></div>`
-    : `<div class="order-box" style="margin-top:1.4rem;"><div class="orow"><span>Total Pesanan</span><span>${fmt(t)}</span></div><div class="orow"><span>DP (${DP_PCT}%)</span><span style="color:var(--gold-light)">${fmt(d)}</span></div><div class="orow orow-total"><span>Sisa Pelunasan</span><span>${fmt(t-d)}</span></div></div>`;
+  let summaryBox = '';
+  if (payMethod==='cash') {
+    summaryBox = `<div class="order-box" style="margin-top:1.4rem;"><div class="orow"><span>Total Pesanan</span><span>${fmt(t)}</span></div><div class="orow orow-total"><span>Bayar Lunas (Tunai)</span><span>${fmt(t)}</span></div></div>`;
+  } else if (payMethod==='bank' && bankPayFull) {
+    summaryBox = `<div class="order-box" style="margin-top:1.4rem;"><div class="orow"><span>Total Pesanan</span><span>${fmt(t)}</span></div><div class="orow orow-total"><span>Transfer Lunas</span><span>${fmt(t)}</span></div></div>`;
+  } else if (payMethod==='bank') {
+    summaryBox = `<div class="order-box" style="margin-top:1.4rem;"><div class="orow"><span>Total Pesanan</span><span>${fmt(t)}</span></div><div class="orow"><span>DP Transfer (${DP_PCT}%)</span><span style="color:var(--gold-light)">${fmt(d)}</span></div><div class="orow orow-total"><span>Sisa Pelunasan</span><span>${fmt(t-d)}</span></div></div>`;
+  }
   h += summaryBox;
   h+=`<button class="btn-primary" id="pesanBtn" onclick="submitOrder()" disabled>Kirim Pesanan</button>
   <button class="btn-ghost" onclick="oGoStep(1)">Ubah Menu</button>`;
   return h;
 }
 
+let bankInfoCache = null;
+
+function updateBankDOM() {
+  if(!bankInfoCache) return;
+  const bn = document.getElementById('bankNameTxt'),
+        bnc = document.getElementById('bankAccTxt'),
+        bhl = document.getElementById('bankHolderTxt');
+  if(bn) bn.innerText = bankInfoCache.bank_name || '-';
+  if(bnc) bnc.innerText = bankInfoCache.account_number || '-';
+  if(bhl) bhl.innerText = bankInfoCache.account_name || '-';
+}
+
 function selPay(m){
   payMethod=m; renderOrder(); checkData();
-  if(m === 'bank') {
-    fetch('/bank-info')
-      .then(r => r.json())
-      .then(res => {
-        const bn = document.getElementById('bankNameTxt'),
-              bnc = document.getElementById('bankAccTxt'),
-              bhl = document.getElementById('bankHolderTxt');
-        if(bn) bn.innerText = res.bank_name || '-';
-        if(bnc) bnc.innerText = res.account_number || '-';
-        if(bhl) bhl.innerText = res.account_name || '-';
-      });
-  }
 }
 
 function handleFile(e){
@@ -154,9 +342,11 @@ function checkData(){
   const validName    = cName.trim().length >= 3;
   const validPhone   = cPhone.trim().length >= 10;
   const validAddress = cAddress.trim().length >= 5;
+  const validEmail   = window.IS_LOGGED_IN ? true : cEmail.trim().length >= 5;
+  const validPass    = window.IS_LOGGED_IN ? true : cPassword.trim().length >= 4;
   const validDate    = cDate.trim().length > 0;
   const validProof   = payMethod === 'cash' ? true : !!uploaded;
-  if(validName && validPhone && validAddress && validDate && payMethod && validProof) {
+  if(validName && validPhone && validAddress && validEmail && validPass && validDate && payMethod && validProof) {
     btn.disabled = false;
   } else {
     btn.disabled = true;
@@ -168,15 +358,20 @@ function cp(txt){navigator.clipboard.writeText(txt).then(()=>{document.querySele
 function submitOrder(){
   const btn = document.getElementById('pesanBtn');
   btn.disabled = true;
-  document.getElementById('pesanLoad').style.display = 'inline';
+  if(document.getElementById('pesanLoad')) document.getElementById('pesanLoad').style.display = 'inline';
   
   const fd = new FormData();
   fd.append('_token', window.CSRF_TOKEN || document.querySelector('meta[name="csrf-token"]')?.content || '');
   fd.append('customer_name',    cName);
   fd.append('customer_phone',   cPhone);
   fd.append('customer_address', cAddress);
+  if (!window.IS_LOGGED_IN) {
+     fd.append('email', cEmail);
+     fd.append('password', cPassword);
+  }
   fd.append('event_date',       cDate);
   fd.append('payment_method',   payMethod);
+  if(payMethod === 'bank') fd.append('bank_pay_full', bankPayFull ? '1' : '0');
   // Bukti hanya diperlukan untuk transfer bank
   if(payMethod === 'bank' && uploaded) fd.append('payment_proof', uploaded);
   
@@ -184,6 +379,7 @@ function submitOrder(){
   MENUS.filter(m=>qty[m.id]>0).forEach(m => {
      fd.append(`items[${itemIdx}][menu_item_id]`, m.id);
      fd.append(`items[${itemIdx}][qty]`, qty[m.id]);
+     fd.append(`items[${itemIdx}][notes]`, itemNotes[m.id] || '');
      itemIdx++;
   });
 
@@ -203,13 +399,13 @@ function submitOrder(){
      } else if(res.errors || res.error) {
        alert('Error: ' + JSON.stringify(res.errors || res.error));
        btn.disabled = false;
-       document.getElementById('pesanLoad').style.display = 'none';
+       if(document.getElementById('pesanLoad')) document.getElementById('pesanLoad').style.display = 'none';
      }
   })
   .catch(e => {
      alert("Terjadi kesalahan jaringan.");
      btn.disabled = false;
-     document.getElementById('pesanLoad').style.display = 'none';
+     if(document.getElementById('pesanLoad')) document.getElementById('pesanLoad').style.display = 'none';
   });
 }
 
@@ -507,3 +703,9 @@ const srObs=new IntersectionObserver(entries=>{
   entries.forEach(e=>{if(e.isIntersecting)e.target.classList.add('vis');});
 },{threshold:.12});
 document.querySelectorAll('.sr').forEach(el=>srObs.observe(el));
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (typeof renderLandingSteppers === 'function') {
+        renderLandingSteppers();
+    }
+});

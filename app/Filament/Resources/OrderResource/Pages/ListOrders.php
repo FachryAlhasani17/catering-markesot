@@ -13,6 +13,18 @@ class ListOrders extends ListRecords
 
     protected function getHeaderActions(): array
     {
-        return [Actions\CreateAction::make()];
+        return [];
+    }
+
+    public function getTabs(): array
+    {
+        return [
+            'Menunggu Verifikasi' => \Filament\Resources\Components\Tab::make('Menunggu Verifikasi')
+                ->badge(\App\Models\Order::where('status', 'pending')->count())
+                ->modifyQueryUsing(fn (\Illuminate\Database\Eloquent\Builder $query) => $query->where('status', 'pending')),
+            'Sedang Dimasak' => \Filament\Resources\Components\Tab::make('Sedang Dimasak (Tunggu Selesai)')
+                ->badge(\App\Models\Order::whereIn('status', ['confirmed', 'dp_paid'])->count())
+                ->modifyQueryUsing(fn (\Illuminate\Database\Eloquent\Builder $query) => $query->whereIn('status', ['confirmed', 'dp_paid'])),
+        ];
     }
 }
