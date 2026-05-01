@@ -14,11 +14,17 @@ class StatsOverviewWidget extends BaseWidget
     protected function getStats(): array
     {
         $totalOrders    = Order::count();
-        $pendingOrders  = Order::where('status', 'pending')->count();
+        $pendingOrders  = Order::where('status', 'pending')
+            ->whereHas('payments', function ($query) {
+                $query->where('payment_method', 'transfer');
+            })->count();
         $confirmedOrders = Order::where('status', 'confirmed')->count();
         $completedOrders = Order::where('status', 'completed')->count();
+        $cancelledOrders = Order::where('status', 'cancelled')->count();
 
-        $pendingPayments = Payment::where('status', 'pending')->count();
+        $pendingPayments = Payment::whereHas('order', function ($query) {
+            $query->where('status', '!=', 'cancelled');
+        })->where('status', 'pending')->count();
 
         $totalRevenue = Payment::where('status', 'verified')->sum('amount');
 
@@ -51,6 +57,11 @@ class StatsOverviewWidget extends BaseWidget
                 ->description('Pesanan berhasil selesai')
                 ->descriptionIcon('heroicon-o-flag')
                 ->color('success'),
+
+            Stat::make('Dibatalkan', $cancelledOrders)
+                ->description('Pesanan dibatalkan')
+                ->descriptionIcon('heroicon-o-x-circle')
+                ->color('danger'),
 
             Stat::make('Pembayaran Menunggu', $pendingPayments)
                 ->description('Perlu diverifikasi')

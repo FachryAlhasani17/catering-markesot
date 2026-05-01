@@ -24,7 +24,7 @@ class PaymentResource extends Resource
     protected static ?string $modelLabel = 'Pembayaran';
     protected static ?string $pluralModelLabel = 'Pembayaran';
     protected static string|\UnitEnum|null $navigationGroup = 'Transaksi';
-    protected static ?int $navigationSort = 2;
+    protected static bool $shouldRegisterNavigation = false;
 
     public static function form(Schema $schema): Schema
     {
@@ -54,7 +54,6 @@ class PaymentResource extends Resource
                     ->label('Metode Pembayaran')
                     ->options([
                         'transfer' => 'Transfer Bank',
-                        'qris'     => 'QRIS',
                         'cash'     => 'Tunai',
                     ])
                     ->nullable(),
@@ -79,6 +78,7 @@ class PaymentResource extends Resource
                 FileUpload::make('proof_image')
                     ->label('Foto Bukti Transfer')
                     ->image()
+                    ->acceptedFileTypes(['image/png', 'image/jpeg', 'image/webp', 'image/heic'])
                     ->imageEditor()
                     ->directory('payment-proofs')
                     ->visibility('public')
@@ -137,7 +137,6 @@ class PaymentResource extends Resource
                     ->label('Metode')
                     ->formatStateUsing(fn ($state) => match ($state) {
                         'transfer' => 'Transfer Bank',
-                        'qris'     => 'QRIS',
                         'cash'     => 'Tunai',
                         default    => $state ?? '—',
                     }),

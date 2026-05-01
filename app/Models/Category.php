@@ -19,6 +19,13 @@ class Category extends Model
         return $this->hasMany(MenuItem::class);
     }
 
+    protected static function booted()
+    {
+        static::deleting(function ($category) {
+            $category->menuItems()->delete();
+        });
+    }
+
     public function scopeActive($query)
     {
         return $query->where('is_active', true);

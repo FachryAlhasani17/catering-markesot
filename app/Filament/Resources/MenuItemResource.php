@@ -43,6 +43,7 @@ class MenuItemResource extends Resource
                 TextInput::make('name')
                     ->label('Nama Menu')
                     ->required()
+                    ->unique(ignoreRecord: true)
                     ->maxLength(255),
 
                 Textarea::make('description')
@@ -76,7 +77,9 @@ class MenuItemResource extends Resource
                 FileUpload::make('image')
                     ->label('Foto Menu')
                     ->image()
+                    ->acceptedFileTypes(['image/png', 'image/jpeg', 'image/webp', 'image/heic'])
                     ->imageEditor()
+                    ->disk('public')
                     ->directory('menu-images')
                     ->visibility('public')
                     ->columnSpanFull(),
@@ -88,11 +91,6 @@ class MenuItemResource extends Resource
                 Toggle::make('is_featured')
                     ->label('Unggulan')
                     ->default(false),
-
-                Textarea::make('notes')
-                    ->label('Catatan (alergen, dll)')
-                    ->rows(2)
-                    ->columnSpanFull(),
             ])->columns(2),
         ]);
     }
