@@ -99,7 +99,8 @@ function oS1(){
     h += `<div style="text-align:center;padding:2.5rem 1rem;">
       <div style="font-size:3rem;margin-bottom:0.8rem;">🛒</div>
       <div style="font-weight:700;font-size:1.1rem;color:#333;margin-bottom:0.4rem;">Keranjang Masih Kosong</div>
-      <div style="font-size:0.85rem;color:#888;line-height:1.5;">Pilih menu favorit Anda dari halaman utama, lalu kembali ke sini untuk melanjutkan pesanan.</div>
+      <div style="font-size:0.85rem;color:#888;line-height:1.5;margin-bottom:1.5rem;">Pilih menu pada halaman utama terlebih dahulu, lalu kembali ke sini untuk melanjutkan pesanan.</div>
+      <button class="btn-primary" onclick="closeOrder(); setTimeout(() => document.getElementById('menu')?.scrollIntoView({behavior:'smooth'}), 100);" style="width:100%;">Lihat Menu Kami</button>
     </div>`;
   } else {
     // Group ordered items by category
@@ -129,8 +130,8 @@ function oS1(){
     h += `<div class="orow orow-total"><span>Total</span><span>${fmt(t)}</span></div></div>`;
   }
 
-  h += `<button class="btn-primary" onclick="oGoStep(2)" ${!has?'disabled':''}>Lanjut ke Pembayaran</button>`;
   if (has) {
+    h += `<button class="btn-primary" onclick="oGoStep(2)">Lanjut ke Pembayaran</button>`;
     h += `<button class="btn-ghost" onclick="closeOrder()" style="margin-top:0.5rem;">Tambah Menu Lagi</button>`;
   }
   return h;
@@ -158,6 +159,57 @@ function oGoStep(n){oStep=n;if(n===2){payMethod=null;uploaded=null;}renderOrder(
 
 function addLandingItem(id) {
     chgQty(id, 1);
+}
+
+function openMenuDetail(id) {
+  const m = MENUS.find(x => x.id == id);
+  if(!m) return;
+  
+  if (m.image) {
+    document.getElementById('mdImg').src = m.image;
+    document.getElementById('mdImg').style.display = 'block';
+    document.getElementById('mdEmoji').style.display = 'none';
+  } else {
+    document.getElementById('mdImg').style.display = 'none';
+    document.getElementById('mdEmoji').innerText = m.emoji || '🍽️';
+    document.getElementById('mdEmoji').style.display = 'flex';
+  }
+
+  document.getElementById('mdCat').innerText = m.category_name || (m.cat === 'drink' ? 'Minuman' : 'Makanan');
+  document.getElementById('mdName').innerText = m.name;
+  document.getElementById('mdPrice').innerText = fmt(m.price);
+  document.getElementById('mdDesc').innerText = m.desc || '-';
+  
+  document.getElementById('mdRasa').innerText = (m.rasa||0) + '/5';
+  document.getElementById('mdHarga').innerText = (m.harga||0) + '/5';
+  document.getElementById('mdSehat').innerText = (m.sehat||0) + '/5';
+  document.getElementById('mdKenyang').innerText = (m.kenyang||0) + '/5';
+  
+  const tagsWrap = document.getElementById('mdTags');
+  if(tagsWrap) tagsWrap.innerHTML = '';
+  /*
+  if(m.tags && Array.isArray(m.tags)) {
+    m.tags.forEach(t => {
+      tagsWrap.innerHTML += `<span style="background:#e0e7ff; color:#4338ca; font-size:0.75rem; font-weight:700; padding:0.2rem 0.6rem; border-radius:12px;">#${t}</span>`;
+    });
+  } else if (typeof m.tags === 'string') {
+    tagsWrap.innerHTML += `<span style="background:#e0e7ff; color:#4338ca; font-size:0.75rem; font-weight:700; padding:0.2rem 0.6rem; border-radius:12px;">#${m.tags}</span>`;
+  }
+  */
+
+  const actWrap = document.getElementById('mdActionWrap');
+  if(qty[id] > 0) {
+    actWrap.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; background:#f9f9f9; border:1px solid #eee; padding:0.6rem 1rem; border-radius:14px;">
+        <span style="font-weight:700; color:var(--text); font-size:0.95rem;">Pesanan: <span style="color:var(--maroon);">${qty[id]} porsi</span></span>
+        <button class="btn-primary" style="margin:0; width:auto; padding:0.5rem 1.2rem; font-size:0.85rem;" onclick="document.getElementById('menuDetailModal').classList.remove('open'); openOrder();">Lihat Keranjang</button>
+      </div>
+    `;
+  } else {
+    actWrap.innerHTML = `<button class="btn-primary" style="margin:0; width:100%;" onclick="addLandingItem(${id}); document.getElementById('menuDetailModal').classList.remove('open');">Tambahkan ke Pesanan</button>`;
+  }
+
+  document.getElementById('menuDetailModal').classList.add('open');
 }
 
 function renderLandingSteppers() {
@@ -214,7 +266,7 @@ function renderLandingSteppers() {
 }
 
 let cName='', cPhone='', cAddress='', cDate='', cEmail='', cPassword='',
-    lastOrderNumber='', lastPayMethod='', lastTotal=0, lastDp=0;
+    lastOrderNumber='', lastPayMethod='', lastTotal=0, lastDp=0, lastOrderRowsHTML='';
 let bankPayFull = false;
 
 function oS2(){
@@ -252,7 +304,7 @@ function oS2(){
   now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
   const minDateTime = now.toISOString().slice(0,16);
 
-  let h = `<div class="dp-banner"><div class="dp-ico"><img src="/images/icons/info.png" class="icon-img" alt="" onerror="this.style.display='none'"></div><div class="dp-info"><h4>Kebijakan DP ${DP_PCT}%</h4><p>DP ditetapkan admin. Pelunasan saat pengambilan.</p></div><div class="dp-right"><div class="dp-num">${fmt(d)}</div><div class="dp-lbl">DP minimum</div></div></div>
+  let h = `<div class="dp-banner"><div class="dp-ico"><img src="/images/icons/info.png" class="icon-img" alt="" onerror="this.style.display='none'"></div><div class="dp-info"><h4>Kebijakan DP ${DP_PCT}%</h4><p>DP telah ditetapkan. Pelunasan saat pengambilan.</p></div><div class="dp-right"><div class="dp-num">${fmt(d)}</div><div class="dp-lbl">DP minimum</div></div></div>
   <div class="form-section">
     <div class="form-section-label">Data Pemesan</div>
     <input type="text" id="custName" placeholder="Nama Lengkap (min. 3 karakter)" value="${cName}" oninput="cName=this.value;checkData()" class="cust-input">
@@ -287,7 +339,7 @@ function oS2(){
         </div>
       </div>
       <h4>Detail Rekening Bank</h4><div class="bank-line"><span class="bl-label">Bank</span><span class="bl-val" id="bankNameTxt">Loading...</span></div><div class="bank-line"><span class="bl-label">No. Rekening</span><span class="bl-val"><span id="bankAccTxt">Loading...</span> <button class="copy-btn" onclick="cp(document.getElementById('bankAccTxt').innerText)">Copy</button></span></div><div class="bank-line"><span class="bl-label">Atas Nama</span><span class="bl-val" id="bankHolderTxt">Loading...</span></div><div class="bank-line"><span class="bl-label">Nominal Transfer</span><span class="bl-val" style="color:var(--maroon);font-weight:800;">${fmt(payAmt)}</span></div></div>`;
-    h+=`<span class="upload-label">Upload Bukti Transfer</span><div class="upload-zone"><input type="file" accept="image/*" id="paymentFile" onchange="handleFile(event)"/><div class="upload-ico"><img src="/images/icons/upload.png" class="icon-img" alt="Upload" onerror="this.style.display='none'"></div><div class="upload-txt" id="uploadText">Klik atau seret foto bukti transfer</div><div class="upload-hint">JPG, PNG — maks. 5MB</div><img class="preview-img ${uploaded?'show':''}" id="prevImg" ${uploaded?`src="${uploaded.previewExt}"`:''}/></div>`;
+    h+=`<span class="upload-label">Upload Bukti Transfer</span><div class="upload-zone"><input type="file" accept=".png, .jpg, .jpeg, .heic, .webp, image/png, image/jpeg, image/heic, image/webp" id="paymentFile" onchange="handleFile(event)"/><div class="upload-ico"><img src="/images/icons/upload.png" class="icon-img" alt="Upload" onerror="this.style.display='none'"></div><div class="upload-txt" id="uploadText">Klik atau seret foto bukti transfer</div><div class="upload-hint">JPG, PNG, HEIC — maks. 5MB</div><img class="preview-img ${uploaded?'show':''}" id="prevImg" ${uploaded?`src="${uploaded.previewExt}"`:''}/></div>`;
   }
   let summaryBox = '';
   if (payMethod==='cash') {
@@ -298,7 +350,8 @@ function oS2(){
     summaryBox = `<div class="order-box" style="margin-top:1.4rem;"><div class="orow"><span>Total Pesanan</span><span>${fmt(t)}</span></div><div class="orow"><span>DP Transfer (${DP_PCT}%)</span><span style="color:var(--gold-light)">${fmt(d)}</span></div><div class="orow orow-total"><span>Sisa Pelunasan</span><span>${fmt(t-d)}</span></div></div>`;
   }
   h += summaryBox;
-  h+=`<button class="btn-primary" id="pesanBtn" onclick="submitOrder()" disabled>Kirim Pesanan</button>
+  h+=`<div id="validationMsg" style="color:#ef4444; font-size:0.85rem; margin-bottom:12px; text-align:left; font-weight:600; display:none; background:#fef2f2; padding:10px 15px; border-radius:8px; border:1px solid #fca5a5; line-height:1.5;"></div>
+  <button class="btn-primary" id="pesanBtn" onclick="submitOrder()" disabled>Kirim Pesanan</button>
   <button class="btn-ghost" onclick="oGoStep(1)">Ubah Menu</button>`;
   return h;
 }
@@ -338,6 +391,7 @@ function handleFile(e){
 
 function checkData(){
   const btn = document.getElementById('pesanBtn');
+  const msg = document.getElementById('validationMsg');
   if(!btn) return;
   const validName    = cName.trim().length >= 3;
   const validPhone   = cPhone.trim().length >= 10;
@@ -345,11 +399,31 @@ function checkData(){
   const validEmail   = window.IS_LOGGED_IN ? true : cEmail.trim().length >= 5;
   const validPass    = window.IS_LOGGED_IN ? true : cPassword.trim().length >= 4;
   const validDate    = cDate.trim().length > 0;
-  const validProof   = payMethod === 'cash' ? true : !!uploaded;
-  if(validName && validPhone && validAddress && validEmail && validPass && validDate && payMethod && validProof) {
+  const validProof   = payMethod === 'bank' ? !!uploaded : true;
+
+  let missing = [];
+  if (!validName) missing.push("Nama (min. 3 huruf)");
+  if (!validPhone) missing.push("Telepon/WA (min. 10 angka)");
+  if (!validEmail) missing.push("Email valid");
+  if (!validPass) missing.push("Password (min. 4 karakter)");
+  if (!validAddress) missing.push("Alamat Pengiriman (min. 5 huruf)");
+  if (!validDate) missing.push("Tanggal & Waktu Acara");
+  
+  if (!payMethod) {
+      missing.push("Pilih Metode Pembayaran");
+  } else if (!validProof) {
+      missing.push("Upload Foto Bukti Transfer");
+  }
+
+  if(missing.length === 0) {
     btn.disabled = false;
+    if (msg) msg.style.display = 'none';
   } else {
     btn.disabled = true;
+    if (msg) {
+      msg.style.display = 'block';
+      msg.innerHTML = "<span style='display:block;margin-bottom:4px;'>Belum lengkap:</span>• " + missing.join("<br/>• ");
+    }
   }
 }
 
@@ -394,8 +468,13 @@ function submitOrder(){
        lastPayMethod   = res.payment_method || payMethod;
        lastTotal       = res.total_amount   || oTotal();
        lastDp          = res.dp_amount      || oDp();
+       lastOrderRowsHTML = MENUS.filter(m=>qty[m.id]>0).map(m=>`<div class="orow"><span>${m.name} ×${qty[m.id]}</span><span>${fmt(m.price*qty[m.id])}</span></div>`).join('');
        oStep = 3;
        renderOrder();
+       localStorage.removeItem('mk_cart_qty');
+       localStorage.removeItem('mk_cart_notes');
+       MENUS.forEach(m=>qty[m.id]=0);
+       if (typeof renderLandingSteppers === 'function') renderLandingSteppers();
      } else if(res.errors || res.error) {
        alert('Error: ' + JSON.stringify(res.errors || res.error));
        btn.disabled = false;
@@ -413,7 +492,7 @@ function oS3(){
   const t = lastTotal || oTotal();
   const d = lastDp   || oDp();
   const isCash = lastPayMethod === 'cash';
-  let rows = MENUS.filter(m=>qty[m.id]>0).map(m=>`<div class="orow"><span>${m.name} ×${qty[m.id]}</span><span>${fmt(m.price*qty[m.id])}</span></div>`).join('');
+  let rows = lastOrderRowsHTML || MENUS.filter(m=>qty[m.id]>0).map(m=>`<div class="orow"><span>${m.name} ×${qty[m.id]}</span><span>${fmt(m.price*qty[m.id])}</span></div>`).join('');
 
   const paymentInfo = isCash
     ? `<div class="orow orow-total"><span>Total Pesanan</span><span>${fmt(t)}</span></div>

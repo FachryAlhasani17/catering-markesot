@@ -50,7 +50,15 @@ class LandingController extends Controller
 
         $dpPercentage = $settingService->dpPercentage();
 
-        return view('landing.index', compact('menus', 'dpPercentage'));
+        // Hitung pesanan aktif untuk notifikasi
+        $activeOrderCount = 0;
+        if (auth()->check()) {
+            $activeOrderCount = Order::where('customer_email', auth()->user()->email)
+                ->whereIn('status', ['pending', 'dp_paid', 'confirmed'])
+                ->count();
+        }
+
+        return view('landing.index', compact('menus', 'dpPercentage', 'activeOrderCount'));
     }
 
     public function store(Request $request, SettingService $settingService)
@@ -61,7 +69,7 @@ class LandingController extends Controller
             'customer_address' => 'required|min:5',
             'event_date'       => 'required|date|after_or_equal:today',
             'payment_method'   => 'required|in:cash,bank',
-            'payment_proof'    => 'required_if:payment_method,bank|nullable|image|max:5120',
+            'payment_proof'    => 'required_if:payment_method,bank|nullable|file|mimes:png,jpg,jpeg,heic,webp|max:5120',
             'items'            => 'required|array|min:1',
             'items.*.menu_item_id' => 'required|exists:menu_items,id',
             'items.*.qty'      => 'required|integer|min:1',
@@ -81,6 +89,10 @@ class LandingController extends Controller
                 if (!\Illuminate\Support\Facades\Hash::check($validated['password'], $user->password)) {
                     return response()->json(['error' => 'Password salah untuk email ini.'], 422);
                 }
+                $user->update([
+                    'phone'   => $validated['customer_phone'],
+                    'address' => $validated['customer_address'],
+                ]);
             } else {
                 $user = \App\Models\User::create([
                     'name'     => $validated['customer_name'],
@@ -88,10 +100,15 @@ class LandingController extends Controller
                     'phone'    => $validated['customer_phone'],
                     'address'  => $validated['customer_address'],
                     'password' => bcrypt($validated['password']),
-                    'role'     => 'buyer',
+                    'role'     => 'user',
                 ]);
             }
             auth()->login($user);
+        } else {
+            auth()->user()->update([
+                'phone'   => $validated['customer_phone'],
+                'address' => $validated['customer_address'],
+            ]);
         }
 
         $isCash = ($validated['payment_method'] === 'cash');
@@ -104,7 +121,11 @@ class LandingController extends Controller
             $order->customer_phone   = $validated['customer_phone'];
             $order->customer_address = $validated['customer_address'];
             $order->customer_email   = auth()->user()->email;
-            $order->event_date       = $validated['event_date'];
+            
+            $datetime = \Carbon\Carbon::parse($validated['event_date']);
+            $order->event_date       = $datetime->toDateString();
+            $order->event_time       = $datetime->toTimeString();
+            
             $order->status           = 'pending';
             // Cash = bayar full (100%)
             // Bank = bayar DP sesuai setting, atau full jika bank_pay_full
@@ -179,10 +200,44 @@ class LandingController extends Controller
 
     public function myOrders()
     {
-        $orders = Order::with('orderItems')
+        $allOrders = Order::with(['orderItems', 'payments'])
             ->where('customer_email', auth()->user()->email)
             ->orderBy('created_at', 'desc')
             ->get();
-        return view('landing.my_orders', compact('orders'));
+
+        // "Dalam Proses" = belum selesai dan belum dibatalkan
+        $activeOrders = $allOrders->whereIn('status', ['pending', 'dp_paid', 'confirmed']);
+
+        // "Riwayat" = sudah selesai atau dibatalkan
+        $historyOrders = $allOrders->whereIn('status', ['completed', 'cancelled']);
+
+        return view('landing.my_orders', compact('activeOrders', 'historyOrders'));
+    }
+
+    public function cancelOrder(Request $request, $id, \App\Services\OrderService $orderService)
+    {
+        $order = Order::where('customer_email', auth()->user()->email)
+            ->where('id', $id)
+            ->firstOrFail();
+
+        if ($order->status !== 'pending') {
+            return back()->with('error', 'Pesanan tidak bisa dibatalkan karena sudah diproses.');
+        }
+
+        $payment = $order->payments()->latest()->first();
+        if ($payment && $payment->payment_method !== 'cash') {
+            return back()->with('error', 'Pembatalan hanya berlaku untuk metode pembayaran Tunai.');
+        }
+
+        $request->validate([
+            'reason' => 'required|string',
+            'other_reason' => 'required_if:reason,Lainnya|nullable|string|max:255',
+        ]);
+
+        $reason = $request->reason === 'Lainnya' ? $request->other_reason : $request->reason;
+        
+        $orderService->cancel($order, $reason);
+
+        return back()->with('success', 'Pesanan berhasil dibatalkan.');
     }
 }

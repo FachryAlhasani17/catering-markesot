@@ -18,7 +18,13 @@ class ViewOrder extends ViewRecord
 
     protected function getHeaderActions(): array
     {
-        return [];
+        return [
+            Actions\Action::make('back')
+                ->label('Kembali')
+                ->icon('heroicon-o-arrow-left')
+                ->color('gray')
+                ->url(OrderResource::getUrl('index')),
+        ];
     }
 
     public function infolist(Schema $schema): Schema
@@ -140,12 +146,11 @@ class ViewOrder extends ViewRecord
                             ->color('danger')
                             ->weight('bold')
                             ->hidden(fn ($record) => ($record->remaining_amount ?? 0) <= 0),
-                        Infolists\Components\ImageEntry::make('payments.proof_image')
+                        Infolists\Components\ViewEntry::make('proof_image_display')
                             ->label('Bukti Transfer')
                             ->columnSpanFull()
-                            ->disk('public')
                             ->hidden(fn ($record) => $record->payments()->whereNotNull('proof_image')->count() === 0)
-                            ->extraImgAttributes(['style' => 'max-height: 400px; object-fit: contain; border-radius: 8px; border: 1px solid #ddd;']),
+                            ->view('filament.infolists.proof-image'),
                     ])->columns(2),
                 ])->columnSpan(['default' => 1, 'md' => 2]),
 
@@ -172,23 +177,9 @@ class ViewOrder extends ViewRecord
                             ->label('Waktu Acara (Tanggal & Jam)')
                             ->dateTime('d M Y, H:i')
                             ->icon('heroicon-o-calendar'),
-                        Infolists\Components\TextEntry::make('total_pax')
-                            ->label('Jumlah Tamu')
-                            ->icon('heroicon-o-users')
-                            ->placeholder('—'),
                     ])->columns(1),
 
-                    Section::make('Catatan Khusus')->schema([
-                        Infolists\Components\TextEntry::make('notes')
-                            ->label('Catatan Pelanggan')
-                            ->placeholder('—'),
-                        Infolists\Components\TextEntry::make('rejection_reason')
-                            ->label('Catatan Penolakan')
-                            ->placeholder('—')
-                            ->color('danger')
-                            ->hidden(fn ($record) => empty($record->payments()->latest()->first()?->rejection_reason))
-                            ->getStateUsing(fn ($record) => $record->payments()->latest()->first()?->rejection_reason),
-                    ])->columns(1),
+
                 ])->columnSpan(['default' => 1, 'md' => 1]),
             ]),
         ]);

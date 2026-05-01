@@ -77,6 +77,7 @@ class MenuItemResource extends Resource
                 FileUpload::make('image')
                     ->label('Foto Menu')
                     ->image()
+                    ->acceptedFileTypes(['image/png', 'image/jpeg', 'image/webp', 'image/heic'])
                     ->imageEditor()
                     ->disk('public')
                     ->directory('menu-images')
@@ -90,11 +91,6 @@ class MenuItemResource extends Resource
                 Toggle::make('is_featured')
                     ->label('Unggulan')
                     ->default(false),
-
-                Textarea::make('notes')
-                    ->label('Catatan (alergen, dll)')
-                    ->rows(2)
-                    ->columnSpanFull(),
             ])->columns(2),
         ]);
     }

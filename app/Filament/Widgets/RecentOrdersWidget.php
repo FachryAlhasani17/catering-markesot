@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Builder;
 
 class RecentOrdersWidget extends BaseWidget
 {
-    protected static ?int $sort = 1;
+    protected static ?int $sort = 3;
     protected int | string | array $columnSpan = 'full';
     protected static ?string $heading = 'Riwayat Pesanan';
 
@@ -62,6 +62,15 @@ class RecentOrdersWidget extends BaseWidget
                     ->dateTime('d M Y H:i'),
             ])
             ->filters([
+                Tables\Filters\SelectFilter::make('status')
+                    ->label('Status Pesanan')
+                    ->options([
+                        'pending'   => 'Menunggu Verifikasi',
+                        'dp_paid'   => 'DP Dibayar',
+                        'confirmed' => 'Sedang Dimasak',
+                        'completed' => 'Selesai',
+                        'cancelled' => 'Dibatalkan',
+                    ]),
                 Tables\Filters\Filter::make('created_at')
                     ->label('Tanggal Transaksi')
                     ->form([

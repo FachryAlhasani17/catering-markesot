@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Users\Schemas;
 
 use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Schemas\Schema;
@@ -14,23 +15,38 @@ class UserForm
         return $schema
             ->components([
                 TextInput::make('name')
+                    ->label('Nama')
                     ->required(),
+
                 TextInput::make('email')
-                    ->label('Email address')
+                    ->label('Email')
                     ->email()
                     ->required(),
-                DateTimePicker::make('email_verified_at'),
+
                 TextInput::make('password')
+                    ->label('Password')
                     ->password()
-                    ->required(),
-                TextInput::make('phone')
-                    ->tel(),
-                Textarea::make('address')
-                    ->columnSpanFull(),
-                TextInput::make('google_id'),
-                TextInput::make('role')
+                    ->dehydrated(fn ($state) => filled($state))
+                    ->required(fn (string $operation): bool => $operation === 'create')
+                    ->helperText('Kosongkan jika tidak ingin mengubah password.'),
+
+                Select::make('role')
+                    ->label('Role')
+                    ->options([
+                        'admin' => 'Admin',
+                        'user'  => 'User',
+                    ])
                     ->required()
-                    ->default('buyer'),
+                    ->default('user')
+                    ->native(false),
+
+                TextInput::make('phone')
+                    ->label('No. HP')
+                    ->tel(),
+
+                Textarea::make('address')
+                    ->label('Alamat')
+                    ->columnSpanFull(),
             ]);
     }
 }

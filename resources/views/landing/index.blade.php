@@ -7,6 +7,16 @@
 <meta name="csrf-token" content="{{ csrf_token() }}">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Outfit:wght@300;400;500;600;700;800&family=Bebas+Neue&display=swap" rel="stylesheet">
 <link href="{{ asset('css/markesot.css') }}" rel="stylesheet">
+<script>
+    // Anti-inspect basic prevention
+    document.addEventListener('contextmenu', event => event.preventDefault());
+    document.onkeydown = function (e) {
+        if(e.keyCode == 123) { return false; }
+        if(e.ctrlKey && e.shiftKey && e.keyCode == 73) { return false; }
+        if(e.ctrlKey && e.shiftKey && e.keyCode == 74) { return false; }
+        if(e.ctrlKey && e.keyCode == 85) { return false; }
+    }
+</script>
 <style>
 /* ── Cart Badge ── */
 .fab-order { position: relative; }
@@ -143,14 +153,51 @@
 </head>
 <body>
 @auth
-  <div class="user-badge" style="position:fixed;top:1rem;right:1rem;background:rgba(255,255,255,0.9);padding:0.5rem 1rem;border-radius:20px;box-shadow:var(--shadow-sm);z-index:100;font-size:0.85rem;display:flex;align-items:center;gap:0.5rem;backdrop-filter:blur(5px);font-weight:500;">
-    <span>👤 {{ auth()->user()->name }}</span>
-    <a href="{{ route('my.orders') }}" style="text-decoration:none;color:var(--text);font-weight:600;padding-left:0.5rem;border-left:1px solid #ddd;">Pesanan Saya</a>
-    <form action="{{ route('logout') }}" method="POST" style="margin:0;">
-      @csrf
-      <button type="submit" style="background:none;border:none;color:var(--maroon);font-weight:700;cursor:pointer;font-size:0.8rem;padding-left:0.5rem;border-left:1px solid #ddd;">Logout</button>
-    </form>
+  <div style="position:fixed;top:1rem;right:1rem;z-index:100;display:flex;align-items:center;gap:0.8rem;">
+    <!-- Pesanan Saya -->
+    <a href="{{ route('my.orders') }}" style="background:rgba(255,255,255,0.9);padding:0.6rem 1.2rem;border-radius:25px;box-shadow:var(--shadow-sm);text-decoration:none;color:var(--text);font-weight:700;font-size:0.85rem;display:flex;align-items:center;gap:0.5rem;backdrop-filter:blur(5px);position:relative;">
+      📦 Pesanan Saya
+      @if($activeOrderCount > 0)
+        <span style="background:#ef4444;color:white;border-radius:50%;min-width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:800;border:2px solid white;position:absolute;top:-6px;right:-6px;">{{ $activeOrderCount }}</span>
+      @endif
+    </a>
+
+    <!-- User Dropdown -->
+    <div style="position:relative;" id="userMenuWrap">
+      <button onclick="document.getElementById('userDropdown').classList.toggle('show-dropdown')" style="background:rgba(255,255,255,0.9);border:none;padding:0.6rem 1.2rem;border-radius:25px;box-shadow:var(--shadow-sm);color:var(--maroon);font-weight:700;font-size:0.85rem;display:flex;align-items:center;gap:0.4rem;backdrop-filter:blur(5px);cursor:pointer;font-family:inherit;">
+        👤 {{ auth()->user()->name }} ▾
+      </button>
+      
+      <div id="userDropdown" class="user-dropdown">
+        <div style="padding: 0.8rem 1rem; border-bottom: 1px solid #f0f0f0; background: #fafafa;">
+          <div style="font-weight: 700; color: var(--text);">{{ auth()->user()->name }}</div>
+          <div style="font-size: 0.75rem; color: var(--text-light); word-break: break-all;">{{ auth()->user()->email }}</div>
+        </div>
+        <a href="{{ route('change.password') }}">🔑 Ubah Password</a>
+        <form action="{{ route('logout') }}" method="POST" style="margin:0;">
+          @csrf
+          <button type="submit">🚪 Logout</button>
+        </form>
+      </div>
+    </div>
   </div>
+
+  <style>
+    .user-dropdown { position: absolute; top: 115%; right: 0; background: white; border-radius: 14px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); width: 200px; overflow: hidden; display: none; flex-direction: column; opacity: 0; transform: translateY(-10px); transition: all 0.2s; }
+    .user-dropdown.show-dropdown { display: flex; opacity: 1; transform: translateY(0); }
+    .user-dropdown a, .user-dropdown button { padding: 0.8rem 1rem; color: var(--text); font-weight: 600; font-size: 0.85rem; text-decoration: none; text-align: left; background: transparent; border: none; width: 100%; cursor: pointer; border-bottom: 1px solid #f0f0f0; font-family: inherit; margin: 0; display: block; box-sizing: border-box; }
+    .user-dropdown a:hover, .user-dropdown button:hover { background: #fdf2f2; color: var(--maroon); }
+    .user-dropdown form:last-child button { border-bottom: none; }
+  </style>
+  <script>
+    document.addEventListener('click', function(e) {
+      const wrap = document.getElementById('userMenuWrap');
+      const drop = document.getElementById('userDropdown');
+      if (wrap && drop && !wrap.contains(e.target)) {
+        drop.classList.remove('show-dropdown');
+      }
+    });
+  </script>
 @else
   <div style="position:fixed;top:1rem;right:1rem;z-index:100;">
     <a href="{{ route('login') }}" style="background:white;color:var(--maroon);padding:0.6rem 1.2rem;border-radius:20px;box-shadow:var(--shadow-sm);text-decoration:none;font-weight:700;font-size:0.85rem;display:inline-block;">Masuk / Daftar</a>
@@ -204,7 +251,7 @@
 
   @foreach($grouped as $catName => $catMenus)
     @if($catIndex === 1)
-      <div id="menuMoreWrap" style="position:relative; max-height:0; overflow:hidden; transition: max-height 0.6s ease;">
+      <div id="menuMoreWrap" style="position:relative; max-height:220px; overflow:hidden; transition: max-height 0.6s ease;">
     @endif
     <div class="menu-category-block sr">
       <div class="menu-cat-header">
@@ -234,12 +281,15 @@
               <div class="m-card-desc">{{ Str::limit($menu['desc'], 55) }}</div>
               <div class="m-card-bottom">
                 <div class="m-card-price">Rp {{ number_format($menu['price'], 0, ',', '.') }}</div>
-                <div class="landing-stepper" id="stepper-{{ $menu['id'] }}">
-                  <button class="add-btn-init" onclick="addLandingItem({{ $menu['id'] }})">+</button>
-                  <div class="stepper-controls" style="display:none;">
-                    <button class="st-minus" onclick="chgQty({{ $menu['id'] }}, -1)">−</button>
-                    <span class="qty-display" id="qty-disp-{{ $menu['id'] }}">1</span>
-                    <button class="st-plus" onclick="chgQty({{ $menu['id'] }}, 1)">+</button>
+                <div style="display:flex; gap:6px; align-items:center;">
+                  <button class="btn-detail" onclick="openMenuDetail({{ $menu['id'] }})" style="background:transparent; border:1px solid var(--maroon); color:var(--maroon); padding:0.35rem 0.6rem; border-radius:20px; font-size:0.75rem; font-weight:700; cursor:pointer; transition:0.2s;" onmouseover="this.style.background='var(--maroon)'; this.style.color='white';" onmouseout="this.style.background='transparent'; this.style.color='var(--maroon)';">Detail</button>
+                  <div class="landing-stepper" id="stepper-{{ $menu['id'] }}">
+                    <button class="add-btn-init" onclick="addLandingItem({{ $menu['id'] }})">+</button>
+                    <div class="stepper-controls" style="display:none;">
+                      <button class="st-minus" onclick="chgQty({{ $menu['id'] }}, -1)">−</button>
+                      <span class="qty-display" id="qty-disp-{{ $menu['id'] }}">1</span>
+                      <button class="st-plus" onclick="chgQty({{ $menu['id'] }}, 1)">+</button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -255,8 +305,8 @@
   @if($catIndex > 1)
     </div>
     <!-- Gradient overlay + Show More button -->
-    <div id="menuFadeOverlay" style="position:relative; margin-top:-3rem; padding-top:3rem; background:linear-gradient(to bottom, rgba(251,248,243,0), rgba(251,248,243,1) 60%); text-align:center; padding-bottom:1rem; z-index:2;">
-      <button id="menuToggleBtn" onclick="toggleMenuMore()" style="background:var(--maroon);color:#fff;border:none;padding:0.7rem 2rem;border-radius:25px;font-weight:700;font-size:0.9rem;cursor:pointer;box-shadow:0 4px 12px rgba(128,0,0,0.2);transition:all 0.2s;">
+    <div id="menuFadeOverlay" style="position:relative; margin-top:-160px; padding-top:130px; background:linear-gradient(to bottom, rgba(254,252,247,0) 0%, rgba(254,252,247,0.9) 60%, rgba(254,252,247,1) 100%); text-align:center; padding-bottom:1rem; z-index:2; pointer-events:none;">
+      <button id="menuToggleBtn" onclick="toggleMenuMore()" style="background:var(--maroon);color:#fff;border:none;padding:0.7rem 2rem;border-radius:25px;font-weight:700;font-size:0.9rem;cursor:pointer;box-shadow:0 4px 12px rgba(128,0,0,0.2);transition:all 0.2s; pointer-events:auto;">
         Lihat Semua Menu ▼
       </button>
     </div>
@@ -269,19 +319,24 @@ function toggleMenuMore() {
   const btn = document.getElementById('menuToggleBtn');
   const overlay = document.getElementById('menuFadeOverlay');
   if (!wrap) return;
-  const isOpen = wrap.style.maxHeight !== '0px' && wrap.style.maxHeight !== '';
-  if (wrap.style.maxHeight === '0px' || wrap.style.maxHeight === '') {
+  
+  if (wrap.style.maxHeight === '220px' || wrap.style.maxHeight === '') {
     wrap.style.maxHeight = wrap.scrollHeight + 'px';
     btn.innerHTML = 'Sembunyikan Menu ▲';
-    overlay.style.background = 'none';
+    overlay.style.background = 'transparent';
     overlay.style.marginTop = '0';
-    overlay.style.paddingTop = '0.5rem';
+    overlay.style.paddingTop = '1rem';
   } else {
-    wrap.style.maxHeight = '0px';
+    wrap.style.maxHeight = '220px';
     btn.innerHTML = 'Lihat Semua Menu ▼';
-    overlay.style.background = 'linear-gradient(to bottom, rgba(251,248,243,0), rgba(251,248,243,1) 60%)';
-    overlay.style.marginTop = '-3rem';
-    overlay.style.paddingTop = '3rem';
+    overlay.style.background = 'linear-gradient(to bottom, rgba(254,252,247,0) 0%, rgba(254,252,247,0.9) 60%, rgba(254,252,247,1) 100%)';
+    overlay.style.marginTop = '-160px';
+    overlay.style.paddingTop = '130px';
+    
+    // Optional: scroll back up to the button
+    setTimeout(() => {
+        btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 400);
   }
 }
 </script>
@@ -385,6 +440,44 @@ function toggleMenuMore() {
   </div>
 </div>
 
+<!-- ═══════════════════════════════════════
+     MENU DETAIL MODAL
+═══════════════════════════════════════ -->
+<div class="overlay" id="menuDetailModal" onclick="if(event.target===this) document.getElementById('menuDetailModal').classList.remove('open')">
+  <div class="sheet" style="max-width: 450px; max-height: 90vh; border-radius: 20px; padding: 0; overflow: hidden; display: flex; flex-direction: column;">
+    <div style="position: relative; width: 100%; height: 260px; background: #f5f5f5;" id="mdImgWrap">
+      <img id="mdImg" src="" style="width: 100%; height: 100%; object-fit: cover; display: none;">
+      <div id="mdEmoji" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 6rem; background: linear-gradient(135deg,#f5e4be,#e8c97a); display: none;">🍽️</div>
+      <button onclick="document.getElementById('menuDetailModal').classList.remove('open')" style="position: absolute; top: 15px; right: 15px; background: rgba(0,0,0,0.5); color: white; border: none; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; cursor: pointer; backdrop-filter: blur(4px); transition: 0.2s;" onmouseover="this.style.background='rgba(0,0,0,0.8)'" onmouseout="this.style.background='rgba(0,0,0,0.5)'">✕</button>
+    </div>
+    <div style="padding: 1.5rem; flex: 1; overflow-y: auto;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.8rem; gap: 1rem;">
+        <div>
+          <span id="mdCat" style="background: var(--gold-light); color: var(--maroon); font-size: 0.75rem; font-weight: 800; padding: 0.3rem 0.8rem; border-radius: 20px; text-transform: uppercase;">Kategori</span>
+          <h2 id="mdName" style="margin: 0.6rem 0 0 0; color: var(--text); font-size: 1.6rem; font-weight: 800;">Nama Menu</h2>
+        </div>
+        <div id="mdPrice" style="font-weight: 800; color: var(--maroon); font-size: 1.25rem; background: #fdf2f2; padding: 0.5rem 1rem; border-radius: 12px; white-space: nowrap;">Rp 0</div>
+      </div>
+      <p id="mdDesc" style="color: var(--text-light); font-size: 0.95rem; line-height: 1.6; margin-bottom: 1.5rem;">Deskripsi...</p>
+      
+      <div style="background: #fafafa; border: 1px solid #eee; border-radius: 14px; padding: 1.2rem;">
+        <h4 style="margin: 0 0 1rem 0; font-size: 0.95rem; color: var(--text); display: flex; align-items: center; gap: 6px;">📊 Karakteristik Rasa</h4>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem;"><span style="color:var(--text-light);">😋 Rasa</span> <span id="mdRasa" style="font-weight:800; color:var(--text);">5/5</span></div>
+          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem;"><span style="color:var(--text-light);">💸 Harga</span> <span id="mdHarga" style="font-weight:800; color:var(--text);">5/5</span></div>
+          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem;"><span style="color:var(--text-light);">🥗 Sehat</span> <span id="mdSehat" style="font-weight:800; color:var(--text);">5/5</span></div>
+          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem;"><span style="color:var(--text-light);">🍛 Kenyang</span> <span id="mdKenyang" style="font-weight:800; color:var(--text);">5/5</span></div>
+        </div>
+        <div id="mdTags" style="margin-top: 1.2rem; display: flex; flex-wrap: wrap; gap: 0.5rem;"></div>
+      </div>
+      
+      <div style="margin-top: 1.5rem;" id="mdActionWrap">
+         <!-- Button generated by JS -->
+      </div>
+    </div>
+  </div>
+</div>
+
 
 <script>
   window.APP_MENUS = {!! json_encode($menus->values()) !!};
@@ -397,6 +490,6 @@ function toggleMenuMore() {
   window.LOGIN_URL = "{{ route('login') }}";
   window.GOOGLE_LOGIN_URL = "{{ route('google.login') }}";
 </script>
-<script src="{{ asset('js/markesot.js') }}"></script>
+<script src="{{ asset('js/markesot.min.js') }}"></script>
 </body>
 </html>

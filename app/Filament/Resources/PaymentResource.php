@@ -78,6 +78,7 @@ class PaymentResource extends Resource
                 FileUpload::make('proof_image')
                     ->label('Foto Bukti Transfer')
                     ->image()
+                    ->acceptedFileTypes(['image/png', 'image/jpeg', 'image/webp', 'image/heic'])
                     ->imageEditor()
                     ->directory('payment-proofs')
                     ->visibility('public')
