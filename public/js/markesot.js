@@ -5,24 +5,21 @@ const MENUS = window.APP_MENUS || [];
 const CRITERIA = [
   { id: 'harga', name: 'Harga Terjangkau', icon: '💰', desc: 'Sesuai kantong' },
   { id: 'rasa', name: 'Rasa Enak', icon: '😋', desc: 'Lezat & memuaskan' },
-  { id: 'kenyang', name: 'Bikin Kenyang', icon: '💪', desc: 'Porsi memuaskan' },
 ];
-const PAIRS = [[0, 1], [0, 2], [1, 2]];
+const PAIRS = [[0, 1]];
 const fmt = n => 'Rp ' + n.toLocaleString('id-ID');
 
 /* ═══════════════════════════════════════
    ORDER SYSTEM
 ═══════════════════════════════════════ */
 const DP_PCT = window.DP_PCT || 50;
-let qty = {}, oStep = 1, payMethod = null;
-let uploadedFile = null, uploadedPreview = null;
-
+let qty = {}, oStep = 1, payMethod = null, uploaded = null;
 MENUS.forEach(m => qty[m.id] = 0);
 const oTotal = () => MENUS.reduce((s, m) => s + m.price * (qty[m.id] || 0), 0);
 const oDp = () => Math.round(oTotal() * DP_PCT / 100);
 
 function openOrder() {
-  oStep = 1; payMethod = null; uploadedFile = null; uploadedPreview = null;
+  oStep = 1; payMethod = null; uploaded = null;
   MENUS.forEach(m => qty[m.id] = 0);
   document.getElementById('orderOverlay').classList.add('open');
   document.body.style.overflow = 'hidden';
@@ -76,18 +73,12 @@ function mRow(m) {
 }
 
 function chgQty(id, d) { qty[id] = Math.max(0, (qty[id] || 0) + d); renderOrder(); }
-
-function oGoStep(n) {
-  oStep = n;
-  if (n === 2) { payMethod = null; uploadedFile = null; uploadedPreview = null; }
-  renderOrder();
-}
+function oGoStep(n) { oStep = n; if (n === 2) { payMethod = null; uploaded = null; } renderOrder(); }
 
 let cName = '', cPhone = '', lastOrderNumber = '';
 
 function oS2() {
   const t = oTotal(), d = oDp();
-  const hasPreview = !!uploadedPreview;
   let h = `<div class="dp-banner"><div class="dp-ico">💡</div><div class="dp-info"><h4>Kebijakan DP ${DP_PCT}%</h4><p>DP ditetapkan admin. Pelunasan saat pengambilan.</p></div><div class="dp-right"><div class="dp-num">${fmt(d)}</div><div class="dp-lbl">DP yang dibayar</div></div></div>
   
   <div style="margin-bottom:1.4rem;">
@@ -114,14 +105,7 @@ function oS2() {
     h += `<div class="pay-detail"><h4>🏦 Detail Rekening</h4><div class="bank-line"><span class="bl-label">Bank</span><span class="bl-val" id="bankNameTxt">Loading...</span></div><div class="bank-line"><span class="bl-label">No. Rekening</span><span class="bl-val"><span id="bankAccTxt">Loading...</span> <button class="copy-btn" onclick="cp(document.getElementById('bankAccTxt').innerText)">Copy</button></span></div><div class="bank-line"><span class="bl-label">Atas Nama</span><span class="bl-val" id="bankHolderTxt">Loading...</span></div><div class="bank-line"><span class="bl-label">Nominal DP</span><span class="bl-val" style="color:var(--maroon)">${fmt(d)}</span></div></div>`;
   }
   if (payMethod) {
-    h += `<span class="upload-label">📎 Upload Bukti Pembayaran</span>
-    <div class="upload-zone">
-      <input type="file" accept="image/*" id="paymentFile" onchange="handleFile(event)"/>
-      <div class="upload-ico">📂</div>
-      <div class="upload-txt" id="uploadText">${uploadedFile ? uploadedFile.name : 'Klik atau seret foto bukti pembayaran'}</div>
-      <div class="upload-hint">JPG, PNG — maks. 5MB</div>
-      <img class="preview-img ${hasPreview ? 'show' : ''}" id="prevImg" ${hasPreview ? `src="${uploadedPreview}"` : ''}/>
-    </div>`;
+    h += `<span class="upload-label">📎 Upload Bukti Pembayaran</span><div class="upload-zone"><input type="file" accept="image/*" id="paymentFile" onchange="handleFile(event)"/><div class="upload-ico">📂</div><div class="upload-txt" id="uploadText">Klik atau seret foto bukti pembayaran</div><div class="upload-hint">JPG, PNG — maks. 5MB</div><img class="preview-img ${uploaded ? 'show' : ''}" id="prevImg" ${uploaded ? `src="${uploaded.previewExt}"` : ''}/></div>`;
   }
   h += `<div class="order-box" style="margin-top:1.4rem;"><div class="orow"><span>Total Pesanan</span><span>${fmt(t)}</span></div><div class="orow"><span>DP (${DP_PCT}%)</span><span style="color:var(--gold-light)">${fmt(d)}</span></div><div class="orow orow-total"><span>Sisa Pelunasan</span><span>${fmt(t - d)}</span></div></div>
   <button class="btn-primary" id="pesanBtn" onclick="submitOrder()" disabled>🛍 Kirim Pesanan <span id="pesanLoad" style="display:none">⏳</span></button>
@@ -130,9 +114,7 @@ function oS2() {
 }
 
 function selPay(m) {
-  payMethod = m;
-  renderOrder();
-  checkData();
+  payMethod = m; renderOrder(); checkData();
 
   if (m === 'qris') {
     fetch('/qris/' + oDp())
@@ -146,7 +128,7 @@ function selPay(m) {
           qc.innerHTML = `<img src="${res.qr_image}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">`;
         }
       })
-      .catch(() => {
+      .catch(err => {
         const qc = document.getElementById('qrisContainer');
         if (qc) qc.innerHTML = `<div style="color:red;padding:1rem;">Gagal memuat QRIS</div>`;
       });
@@ -169,24 +151,14 @@ function handleFile(e) {
   const f = e.target.files[0];
   if (!f) return;
   if (f.size > 5 * 1024 * 1024) { alert("Maksimal 5MB!"); e.target.value = ''; return; }
-
-  uploadedFile = f;
-  uploadedPreview = null;
-  checkData();
-
+  uploaded = f;
   const r = new FileReader();
   r.onload = ev => {
-    uploadedPreview = ev.target.result;
+    uploaded.previewExt = ev.target.result;
     const img = document.getElementById('prevImg');
-    if (img) { img.src = uploadedPreview; img.classList.add('show'); }
+    if (img) { img.src = ev.target.result; img.classList.add('show'); }
     const txt = document.getElementById('uploadText');
     if (txt) { txt.innerText = f.name; }
-    checkData();
-  };
-  r.onerror = () => {
-    uploadedFile = null;
-    uploadedPreview = null;
-    alert("Gagal membaca file, coba lagi.");
     checkData();
   };
   r.readAsDataURL(f);
@@ -197,8 +169,11 @@ function checkData() {
   if (!btn) return;
   const validName = cName.trim().length >= 3;
   const validPhone = cPhone.trim().length >= 10;
-  const validFile = !!uploadedFile && !!uploadedPreview;
-  btn.disabled = !(validName && validPhone && payMethod && validFile);
+  if (validName && validPhone && payMethod && uploaded) {
+    btn.disabled = false;
+  } else {
+    btn.disabled = true;
+  }
 }
 
 function cp(txt) { navigator.clipboard.writeText(txt).then(() => { document.querySelectorAll('.copy-btn').forEach(b => { if (b.textContent === 'Copy') { b.textContent = '✓'; setTimeout(() => b.textContent = 'Copy', 1300); } }); }); }
@@ -213,7 +188,7 @@ function submitOrder() {
   fd.append('customer_name', cName);
   fd.append('customer_phone', cPhone);
   fd.append('payment_method', payMethod);
-  fd.append('payment_proof', uploadedFile);
+  fd.append('payment_proof', uploaded);
 
   let itemIdx = 0;
   MENUS.filter(m => qty[m.id] > 0).forEach(m => {
@@ -222,7 +197,10 @@ function submitOrder() {
     itemIdx++;
   });
 
-  fetch('/order', { method: 'POST', body: fd })
+  fetch('/order', {
+    method: 'POST',
+    body: fd
+  })
     .then(r => r.json())
     .then(res => {
       if (res.order_number) {
@@ -235,7 +213,7 @@ function submitOrder() {
         document.getElementById('pesanLoad').style.display = 'none';
       }
     })
-    .catch(() => {
+    .catch(e => {
       alert("Terjadi kesalahan jaringan.");
       btn.disabled = false;
       document.getElementById('pesanLoad').style.display = 'none';
@@ -251,21 +229,16 @@ function oS3() {
   <button class="btn-primary" onclick="window.location.reload()">Selesai & Tutup</button></div>`;
 }
 
-function resetOrder() {
-  MENUS.forEach(m => qty[m.id] = 0);
-  payMethod = null; uploadedFile = null; uploadedPreview = null;
-  oStep = 1; cName = ''; cPhone = '';
-  closeOrder();
-}
+function resetOrder() { MENUS.forEach(m => qty[m.id] = 0); payMethod = null; uploaded = null; oStep = 1; cName = ''; cPhone = ''; closeOrder(); }
 
 /* ═══════════════════════════════════════
    DSS / AHP SYSTEM
 ═══════════════════════════════════════ */
-let pairAns = Array(3).fill(null);
-let prefAns = { harga: null, rasa: null, kenyang: null };
+let pairAns = Array(1).fill(null);
+let prefAns = { harga: null, rasa: null };
 let dssScreen = 0;
 
-const TOTAL_Q = 6;
+const TOTAL_Q = 3; // 1 pair + 2 pref
 
 function openDSS() {
   dssScreen = 0;
@@ -278,33 +251,42 @@ function closeDSS() {
   document.body.style.overflow = '';
 }
 
+// ✅ FIX: routing screen disesuaikan dengan jumlah pair & pref
+// screen 0 = intro
+// screen 1 = pair (1 saja)
+// screen 2 = pref ke-1 (harga)
+// screen 3 = pref ke-2 (rasa)
+// screen 4 = loading
+// screen 5 = result
 function renderDSS() {
   updateDSSProgress();
   const b = document.getElementById('dssBody');
   if (dssScreen === 0) b.innerHTML = dssIntro();
-  else if (dssScreen <= 3) b.innerHTML = dssPair(dssScreen - 1);
-  else if (dssScreen <= 6) b.innerHTML = dssPref(dssScreen - 4);
-  else if (dssScreen === 7) { b.innerHTML = dssLoading(); runDSSLoading(); }
+  else if (dssScreen === 1) b.innerHTML = dssPair(0);
+  else if (dssScreen === 2) b.innerHTML = dssPref(0);
+  else if (dssScreen === 3) b.innerHTML = dssPref(1);
+  else if (dssScreen === 4) { b.innerHTML = dssLoading(); runDSSLoading(); }
   else b.innerHTML = dssResult();
   b.scrollTop = 0;
   setTimeout(animW, 80);
 }
 
+// ✅ FIX: labels disesuaikan dengan 6 screen saja
 function updateDSSProgress() {
   const answered = pairAns.filter(Boolean).length + Object.values(prefAns).filter(Boolean).length;
   const pct = Math.round((answered / TOTAL_Q) * 100);
   document.getElementById('dssPFill').style.width = pct + '%';
   document.getElementById('dssPStep').textContent = answered + ' dari ' + TOTAL_Q;
-  const labels = ['Yuk Mulai!', 'Bandingkan Kriteria', 'Bandingkan Kriteria', 'Bandingkan Kriteria', 'Preferensimu', 'Preferensimu', 'Preferensimu', 'Menganalisis...', 'Hasilnya ada!'];
+  const labels = ['Yuk Mulai!', 'Bandingkan Kriteria', 'Preferensimu', 'Preferensimu', 'Menganalisis...', 'Hasilnya ada!'];
   document.getElementById('dssPLabel').textContent = labels[dssScreen] || '';
   let dots = '';
   for (let i = 0; i < TOTAL_Q; i++) { const done = i < answered, active = i === answered; dots += `<div class="dss-dot ${done ? 'done' : active ? 'active' : ''}"></div>`; }
   document.getElementById('dssPDots').innerHTML = dots;
 }
 
-// AHP engine — FIX: n=3 bukan 4 (sesuai jumlah kriteria)
+// AHP engine
 function buildMatrix() {
-  const n = 3, M = Array.from({ length: n }, () => Array(n).fill(1));
+  const n = 2, M = Array.from({ length: n }, () => Array(n).fill(1));
   PAIRS.forEach(([i, j], k) => {
     const a = pairAns[k]; if (!a) return;
     const scale = [1, 2, 4, 6, 8];
@@ -330,19 +312,19 @@ function calcScores(w) {
 
 // DSS Screens
 function dssIntro() {
-  return `<div class="chat-bubble"><div class="chat-avatar">👨‍🍳</div><div class="chat-text">Halo! Saya <strong>Chef Markesot</strong> 🍽️<br><br>Biar kamu nggak bingung, yuk kita cari menu paling cocok buat kamu sekarang!<br><br>Cukup <strong>6 pertanyaan singkat</strong> — mudah banget, santai aja 😊</div></div>
+  return `<div class="chat-bubble"><div class="chat-avatar">👨‍🍳</div><div class="chat-text">Halo! Saya <strong>Chef Markesot</strong> 🍽️<br><br>Biar kamu nggak bingung, yuk kita cari menu paling cocok buat kamu sekarang!<br><br>Cukup <strong>3 pertanyaan singkat</strong> — mudah banget, santai aja 😊</div></div>
   <div style="background:white;border-radius:16px;padding:1.4rem;box-shadow:var(--shadow-sm);margin-bottom:1rem;">
     <div style="font-weight:700;font-size:.95rem;color:var(--text);margin-bottom:.9rem;">📋 Cara kerjanya:</div>
     <div style="display:flex;flex-direction:column;gap:.6rem;">
       <div style="display:flex;gap:.8rem;align-items:center;background:var(--gold-pale);border-radius:10px;padding:.8rem .9rem;">
         <div style="font-size:1.5rem">⚖️</div>
-        <div style="flex:1"><div style="font-weight:700;font-size:.85rem;color:var(--maroon-dark)">3 pertanyaan — Pilih yang lebih penting</div><div style="font-size:.75rem;color:var(--text-light)">Pilih mana dari 2 hal yang lebih penting buatmu</div></div>
-        <div style="background:var(--maroon);color:white;border-radius:6px;padding:.2rem .55rem;font-size:.7rem;font-weight:700;flex-shrink:0">3 soal</div>
+        <div style="flex:1"><div style="font-weight:700;font-size:.85rem;color:var(--maroon-dark)">1 pertanyaan — Pilih yang lebih penting</div><div style="font-size:.75rem;color:var(--text-light)">Pilih mana dari 2 hal yang lebih penting buatmu</div></div>
+        <div style="background:var(--maroon);color:white;border-radius:6px;padding:.2rem .55rem;font-size:.7rem;font-weight:700;flex-shrink:0">1 soal</div>
       </div>
       <div style="display:flex;gap:.8rem;align-items:center;background:var(--green-bg);border-radius:10px;padding:.8rem .9rem;">
         <div style="font-size:1.5rem">🎛️</div>
-        <div style="flex:1"><div style="font-weight:700;font-size:.85rem;color:var(--maroon-dark)">3 pertanyaan — Kondisimu hari ini</div><div style="font-size:.75rem;color:var(--text-light)">Ceritain kondisi & mood makanmu sekarang</div></div>
-        <div style="background:var(--green);color:white;border-radius:6px;padding:.2rem .55rem;font-size:.7rem;font-weight:700;flex-shrink:0">3 soal</div>
+        <div style="flex:1"><div style="font-weight:700;font-size:.85rem;color:var(--maroon-dark)">2 pertanyaan — Kondisimu hari ini</div><div style="font-size:.75rem;color:var(--text-light)">Ceritain kondisi & mood makanmu sekarang</div></div>
+        <div style="background:var(--green);color:white;border-radius:6px;padding:.2rem .55rem;font-size:.7rem;font-weight:700;flex-shrink:0">2 soal</div>
       </div>
     </div>
   </div>
@@ -351,10 +333,8 @@ function dssIntro() {
 
 function dssPair(idx) {
   const [i, j] = PAIRS[idx], A = CRITERIA[i], B = CRITERIA[j], ans = pairAns[idx];
-  const winner = ans?.winner, intensity = ans?.intensity ?? 1;
-  const showInt = winner === 0 || winner === 1;
-  const iLabels = [{ i: '😐', l: 'Sedikit' }, { i: '✅', l: 'Lumayan' }, { i: '⭐', l: 'Jelas' }, { i: '🔥', l: 'Banget!' }];
-  return `<div class="pair-counter">Pertanyaan ${idx + 1} dari 3<div class="pair-dots">${[0, 1, 2].map(k => `<div class="pdot ${k < idx ? 'done' : k === idx ? 'active' : ''}"></div>`).join('')}</div></div>
+  const winner = ans?.winner;
+  return `<div class="pair-counter">Pertanyaan 1 dari 1<div class="pair-dots"><div class="pdot active"></div></div></div>
   <div style="background:white;border-radius:16px;padding:1.4rem;box-shadow:var(--shadow-sm);">
     <div style="font-weight:700;font-size:1rem;color:var(--text);margin-bottom:.3rem;">Mana yang lebih penting buatmu?</div>
     <div style="font-size:.82rem;color:var(--text-light);margin-bottom:1.1rem;">Tap salah satu yang lebih kamu prioritaskan saat memilih makan.</div>
@@ -363,7 +343,7 @@ function dssPair(idx) {
         <div class="versus-icon">${A.icon}</div>
         <div class="versus-name">${A.name}</div>
         <div class="versus-desc">${A.desc}</div>
-        ${winner === 1 ? '<div style="font-size:1.2rem">✅</div>' : ''}
+        ${winner === 0 ? '<div style="font-size:1.2rem">✅</div>' : ''}
       </div>
       <div class="vs-divider"><div class="vs-circle">VS</div></div>
       <div class="versus-side ${winner === 1 ? 'sel' : ''}" onclick="dssSelWinner(${idx},1)">
@@ -373,12 +353,8 @@ function dssPair(idx) {
         ${winner === 1 ? '<div style="font-size:1.2rem">✅</div>' : ''}
       </div>
     </div>
-    <div class="equal-btn ${winner === 'equal' ? 'sel' : ''}" onclick="dssSelWinner(${idx},'equal')">😌 Dua-duanya sama pentingnya</div>
-    ${showInt ? `<div style="margin-top:1rem;padding-top:.9rem;border-top:1px solid var(--border)">
-      <div class="intensity-row">${iLabels.map((l, k) => `<div class="int-btn ${intensity === k ? 'sel' : ''}" onclick="dssSetInt(${idx},${k})"><span>${l.i}</span><span class="int-lbl">${l.l}</span></div>`).join('')}</div>
-    </div>` : ''}
     <button class="btn-primary" onclick="dssNextPair(${idx})" ${winner === null || winner === undefined ? 'disabled' : ''}>
-      ${idx < 2 ? 'Pertanyaan Berikutnya →' : 'Lanjut ke Bagian 2 →'}
+      Lanjut ke Bagian 2 →
     </button>
   </div>`;
 }
@@ -396,7 +372,13 @@ function dssSetInt(idx, k) {
   document.getElementById('dssBody').innerHTML = dssPair(idx);
   updateDSSProgress(); setTimeout(animW, 50);
 }
-function dssNextPair(idx) { if (!pairAns[idx]) return; dssScreen = idx + 2; renderDSS(); }
+
+// ✅ FIX: setelah pair selesai langsung ke screen 2 (pref ke-1)
+function dssNextPair(idx) {
+  if (!pairAns[idx]) return;
+  dssScreen = 2;
+  renderDSS();
+}
 
 const PREF_QS = [
   {
@@ -407,15 +389,11 @@ const PREF_QS = [
     cid: 'rasa', icon: '😋', q: 'Lagi pengen rasa yang gimana?', hint: 'Pilih sesuai mood makanmu sekarang.',
     opts: [{ v: 1, i: '😐', l: 'Biasa aja', s: 'Yang penting kenyang' }, { v: 3, i: '😋', l: 'Agak enak', s: 'Lumayan pengen enak' }, { v: 5, i: '🤤', l: 'Enak banget!', s: 'Mood makan enak' }]
   },
-  {
-    cid: 'kenyang', icon: '💪', q: 'Butuh kenyang berapa lama?', hint: 'Pilih sesuai aktivitasmu setelah makan.',
-    opts: [{ v: 1, i: '🐦', l: 'Ringan aja', s: 'Nggak mau terlalu kenyang' }, { v: 3, i: '🙂', l: 'Normal', s: 'Cukup sampai sore' }, { v: 5, i: '🏋️', l: 'Kenyang lama!', s: 'Aktivitas panjang setelah ini' }]
-  },
 ];
 
 function dssPref(idx) {
   const Q = PREF_QS[idx], sel = prefAns[Q.cid];
-  return `<div class="chat-bubble"><div class="chat-avatar">👨‍🍳</div><div class="chat-text">Hampir selesai! Pertanyaan ${idx + 1} dari 3 — tentang kondisimu hari ini ya 😊</div></div>
+  return `<div class="chat-bubble"><div class="chat-avatar">👨‍🍳</div><div class="chat-text">Hampir selesai! Pertanyaan ${idx + 1} dari 2 — tentang kondisimu hari ini ya 😊</div></div>
   <div style="background:white;border-radius:16px;padding:1.4rem;box-shadow:var(--shadow-sm);">
     <div style="font-size:1.8rem;margin-bottom:.5rem;">${Q.icon}</div>
     <div style="font-weight:700;font-size:1rem;color:var(--text);margin-bottom:.3rem;">${Q.q}</div>
@@ -429,7 +407,7 @@ function dssPref(idx) {
       </div>`).join('')}
     </div>
     <button class="btn-primary" onclick="dssNextPref(${idx})" ${sel === null || sel === undefined ? 'disabled' : ''}>
-      ${idx < 2 ? 'Pertanyaan Berikutnya →' : 'Lihat Rekomendasiku! 🎉'}
+      ${idx < 1 ? 'Pertanyaan Berikutnya →' : 'Lihat Rekomendasiku! 🎉'}
     </button>
   </div>`;
 }
@@ -439,7 +417,12 @@ function dssSelPref(cid, v, idx) {
   document.getElementById('dssBody').innerHTML = dssPref(idx);
   updateDSSProgress(); setTimeout(animW, 50);
 }
-function dssNextPref(idx) { dssScreen = idx < 2 ? idx + 5 : 7; renderDSS(); }
+
+// ✅ FIX: pref ke-1 (idx=0) → screen 3, pref ke-2 (idx=1) → screen 4 (loading)
+function dssNextPref(idx) {
+  dssScreen = idx < 1 ? 3 : 4;
+  renderDSS();
+}
 
 function dssLoading() {
   return `<div style="text-align:center;padding:2rem 1rem;">
@@ -455,10 +438,11 @@ function dssLoading() {
   </div>`;
 }
 
+// ✅ FIX: loading selesai → screen 5 (result)
 function runDSSLoading() {
   const steps = document.querySelectorAll('.load-step');
   [400, 1000, 1600, 2200].forEach((d, i) => setTimeout(() => { if (steps[i]) steps[i].classList.add('done'); }, d));
-  setTimeout(() => { dssScreen = 8; renderDSS(); }, 2900);
+  setTimeout(() => { dssScreen = 5; renderDSS(); }, 2900);
 }
 
 function dssResult() {
@@ -504,16 +488,13 @@ function dssResult() {
 
 function closeDSSOpenOrder(recName) {
   closeDSS();
-  setTimeout(() => {
-    openOrder();
-    const rec = MENUS.find(m => m.name === recName);
-    if (rec) { qty[rec.id] = 1; renderOrder(); }
-  }, 300);
+  setTimeout(() => { openOrder(); }, 300);
 }
 
+// ✅ FIX: reset hanya untuk 2 kriteria
 function resetDSS() {
-  pairAns = Array(3).fill(null);
-  prefAns = { harga: null, rasa: null, kenyang: null };
+  pairAns = Array(1).fill(null);
+  prefAns = { harga: null, rasa: null };
   dssScreen = 0;
   renderDSS();
 }
